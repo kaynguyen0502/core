@@ -1,0 +1,215 @@
+# FILE TỰ SINH bởi tools/generate.py từ points.csv. Không sửa tay.
+title: SmartLab – Khoa Hóa Sinh
+views:
+  - title: Tổng quan
+    path: tong-quan
+    cards:
+      - type: entity-filter
+        title: ĐANG CẢNH BÁO
+        state_filter: ['on']
+        show_empty: false
+        entities:
+          - binary_sensor.canh_bao_tl01
+          - binary_sensor.mat_tin_hieu_tl01
+          - binary_sensor.canh_bao_tl02
+          - binary_sensor.mat_tin_hieu_tl02
+          - binary_sensor.canh_bao_tl03
+          - binary_sensor.mat_tin_hieu_tl03
+          - binary_sensor.canh_bao_tl04
+          - binary_sensor.mat_tin_hieu_tl04
+          - binary_sensor.canh_bao_tl05
+          - binary_sensor.mat_tin_hieu_tl05
+          - binary_sensor.canh_bao_tl06
+          - binary_sensor.mat_tin_hieu_tl06
+          - binary_sensor.canh_bao_tl07
+          - binary_sensor.mat_tin_hieu_tl07
+          - binary_sensor.canh_bao_tl08
+          - binary_sensor.mat_tin_hieu_tl08
+          - binary_sensor.canh_bao_tl09
+          - binary_sensor.mat_tin_hieu_tl09
+          - binary_sensor.canh_bao_tl10
+          - binary_sensor.mat_tin_hieu_tl10
+          - binary_sensor.canh_bao_tl11
+          - binary_sensor.mat_tin_hieu_tl11
+          - binary_sensor.canh_bao_tl12
+          - binary_sensor.mat_tin_hieu_tl12
+          - binary_sensor.canh_bao_mt01
+          - binary_sensor.mat_tin_hieu_mt01
+          - binary_sensor.canh_bao_mt02
+          - binary_sensor.mat_tin_hieu_mt02
+          - binary_sensor.canh_bao_mt03
+          - binary_sensor.mat_tin_hieu_mt03
+          - binary_sensor.canh_bao_mt04
+          - binary_sensor.mat_tin_hieu_mt04
+          - binary_sensor.canh_bao_mt05
+          - binary_sensor.mat_tin_hieu_mt05
+          - binary_sensor.canh_bao_mt06
+          - binary_sensor.mat_tin_hieu_mt06
+          - binary_sensor.canh_bao_ro01
+          - binary_sensor.mat_tin_hieu_ro01
+          - binary_sensor.canh_bao_ro02
+          - binary_sensor.mat_tin_hieu_ro02
+          - binary_sensor.canh_bao_ro03
+          - binary_sensor.mat_tin_hieu_ro03
+      - type: grid
+        title: "Tủ lạnh / tủ đông"
+        columns: 6
+        square: false
+        cards:
+          - type: sensor
+            entity: sensor.smartlab_tl01_nhiet_do
+            name: "Tủ lạnh 01"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl02_nhiet_do
+            name: "Tủ lạnh 02"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl03_nhiet_do
+            name: "Tủ lạnh 03"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl04_nhiet_do
+            name: "Tủ lạnh 04"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl05_nhiet_do
+            name: "Tủ lạnh 05"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl06_nhiet_do
+            name: "Tủ lạnh 06"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl07_nhiet_do
+            name: "Tủ lạnh 07"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl08_nhiet_do
+            name: "Tủ lạnh 08"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl09_nhiet_do
+            name: "Tủ lạnh 09"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl10_nhiet_do
+            name: "Tủ lạnh 10"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl11_nhiet_do
+            name: "Tủ đông 11"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_tl12_nhiet_do
+            name: "Tủ đông 12"
+            graph: line
+            hours_to_show: 24
+      - type: grid
+        title: "Phòng xét nghiệm"
+        columns: 6
+        square: false
+        cards:
+          - type: sensor
+            entity: sensor.smartlab_mt01_nhiet_do
+            name: "Phòng XN 01"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_mt02_nhiet_do
+            name: "Phòng XN 02"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_mt03_nhiet_do
+            name: "Phòng XN 03"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_mt04_nhiet_do
+            name: "Phòng XN 04"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_mt05_nhiet_do
+            name: "Phòng XN 05"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_mt06_nhiet_do
+            name: "Phòng XN 06"
+            graph: line
+            hours_to_show: 24
+      - type: grid
+        title: "Nước RO"
+        columns: 3
+        square: false
+        cards:
+          - type: sensor
+            entity: sensor.smartlab_ro01_ec
+            name: "Máy RO 01"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_ro02_ec
+            name: "Máy RO 02"
+            graph: line
+            hours_to_show: 24
+          - type: sensor
+            entity: sensor.smartlab_ro03_ec
+            name: "Máy RO 03"
+            graph: line
+            hours_to_show: 24
+  - title: Biểu đồ
+    path: bieu-do
+    cards:
+      - type: history-graph
+        title: "Tủ lạnh / tủ đông – 7 ngày"
+        hours_to_show: 168
+        entities:
+          - sensor.smartlab_tl01_nhiet_do
+          - sensor.smartlab_tl02_nhiet_do
+          - sensor.smartlab_tl03_nhiet_do
+          - sensor.smartlab_tl04_nhiet_do
+          - sensor.smartlab_tl05_nhiet_do
+          - sensor.smartlab_tl06_nhiet_do
+          - sensor.smartlab_tl07_nhiet_do
+          - sensor.smartlab_tl08_nhiet_do
+          - sensor.smartlab_tl09_nhiet_do
+          - sensor.smartlab_tl10_nhiet_do
+          - sensor.smartlab_tl11_nhiet_do
+          - sensor.smartlab_tl12_nhiet_do
+      - type: history-graph
+        title: "Phòng xét nghiệm – 7 ngày"
+        hours_to_show: 168
+        entities:
+          - sensor.smartlab_mt01_nhiet_do
+          - sensor.smartlab_mt01_do_am
+          - sensor.smartlab_mt02_nhiet_do
+          - sensor.smartlab_mt02_do_am
+          - sensor.smartlab_mt03_nhiet_do
+          - sensor.smartlab_mt03_do_am
+          - sensor.smartlab_mt04_nhiet_do
+          - sensor.smartlab_mt04_do_am
+          - sensor.smartlab_mt05_nhiet_do
+          - sensor.smartlab_mt05_do_am
+          - sensor.smartlab_mt06_nhiet_do
+          - sensor.smartlab_mt06_do_am
+      - type: history-graph
+        title: "Nước RO – 7 ngày"
+        hours_to_show: 168
+        entities:
+          - sensor.smartlab_ro01_ec
+          - sensor.smartlab_ro02_ec
+          - sensor.smartlab_ro03_ec

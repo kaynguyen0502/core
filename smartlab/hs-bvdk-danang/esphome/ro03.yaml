@@ -1,0 +1,5 @@
+substitutions:
+  device: ro03
+
+packages:
+  common: !include ro-common.yaml

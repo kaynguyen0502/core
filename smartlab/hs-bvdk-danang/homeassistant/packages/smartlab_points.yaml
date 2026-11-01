@@ -1,0 +1,711 @@
+# FILE TỰ SINH bởi tools/generate.py từ points.csv. Không sửa tay.
+template:
+  - sensor:
+      - name: "SmartLab tl01 nhiệt độ"
+        unique_id: smartlab_tl01_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl01_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl01_raw_temperature')) }}"
+      - name: "SmartLab tl02 nhiệt độ"
+        unique_id: smartlab_tl02_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl02_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl02_raw_temperature')) }}"
+      - name: "SmartLab tl03 nhiệt độ"
+        unique_id: smartlab_tl03_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl03_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl03_raw_temperature')) }}"
+      - name: "SmartLab tl04 nhiệt độ"
+        unique_id: smartlab_tl04_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl04_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl04_raw_temperature')) }}"
+      - name: "SmartLab tl05 nhiệt độ"
+        unique_id: smartlab_tl05_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl05_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl05_raw_temperature')) }}"
+      - name: "SmartLab tl06 nhiệt độ"
+        unique_id: smartlab_tl06_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl06_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl06_raw_temperature')) }}"
+      - name: "SmartLab tl07 nhiệt độ"
+        unique_id: smartlab_tl07_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl07_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl07_raw_temperature')) }}"
+      - name: "SmartLab tl08 nhiệt độ"
+        unique_id: smartlab_tl08_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl08_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl08_raw_temperature')) }}"
+      - name: "SmartLab tl09 nhiệt độ"
+        unique_id: smartlab_tl09_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl09_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl09_raw_temperature')) }}"
+      - name: "SmartLab tl10 nhiệt độ"
+        unique_id: smartlab_tl10_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl10_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl10_raw_temperature')) }}"
+      - name: "SmartLab tl11 nhiệt độ"
+        unique_id: smartlab_tl11_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl11_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl11_raw_temperature')) }}"
+      - name: "SmartLab tl12 nhiệt độ"
+        unique_id: smartlab_tl12_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.tl12_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.tl12_raw_temperature')) }}"
+      - name: "SmartLab mt01 nhiệt độ"
+        unique_id: smartlab_mt01_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.mt01_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt01_raw_temperature')) }}"
+      - name: "SmartLab mt01 độ ẩm"
+        unique_id: smartlab_mt01_hum
+        device_class: humidity
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ (states('sensor.mt01_raw_humidity') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt01_raw_humidity')) }}"
+      - name: "SmartLab mt02 nhiệt độ"
+        unique_id: smartlab_mt02_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.mt02_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt02_raw_temperature')) }}"
+      - name: "SmartLab mt02 độ ẩm"
+        unique_id: smartlab_mt02_hum
+        device_class: humidity
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ (states('sensor.mt02_raw_humidity') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt02_raw_humidity')) }}"
+      - name: "SmartLab mt03 nhiệt độ"
+        unique_id: smartlab_mt03_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.mt03_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt03_raw_temperature')) }}"
+      - name: "SmartLab mt03 độ ẩm"
+        unique_id: smartlab_mt03_hum
+        device_class: humidity
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ (states('sensor.mt03_raw_humidity') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt03_raw_humidity')) }}"
+      - name: "SmartLab mt04 nhiệt độ"
+        unique_id: smartlab_mt04_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.mt04_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt04_raw_temperature')) }}"
+      - name: "SmartLab mt04 độ ẩm"
+        unique_id: smartlab_mt04_hum
+        device_class: humidity
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ (states('sensor.mt04_raw_humidity') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt04_raw_humidity')) }}"
+      - name: "SmartLab mt05 nhiệt độ"
+        unique_id: smartlab_mt05_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.mt05_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt05_raw_temperature')) }}"
+      - name: "SmartLab mt05 độ ẩm"
+        unique_id: smartlab_mt05_hum
+        device_class: humidity
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ (states('sensor.mt05_raw_humidity') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt05_raw_humidity')) }}"
+      - name: "SmartLab mt06 nhiệt độ"
+        unique_id: smartlab_mt06_temp
+        device_class: temperature
+        unit_of_measurement: "°C"
+        state_class: measurement
+        state: "{{ (states('sensor.mt06_raw_temperature') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt06_raw_temperature')) }}"
+      - name: "SmartLab mt06 độ ẩm"
+        unique_id: smartlab_mt06_hum
+        device_class: humidity
+        unit_of_measurement: "%"
+        state_class: measurement
+        state: "{{ (states('sensor.mt06_raw_humidity') | float(0) + 0.0) | round(1) }}"
+        availability: "{{ is_number(states('sensor.mt06_raw_humidity')) }}"
+      - name: "SmartLab ro01 EC"
+        unique_id: smartlab_ro01_ec
+        unit_of_measurement: "µS/cm"
+        state_class: measurement
+        state: "{{ (states('sensor.ro01_ec') | float(0) + 0.0) | round(2) }}"
+        availability: "{{ is_number(states('sensor.ro01_ec')) }}"
+      - name: "SmartLab ro02 EC"
+        unique_id: smartlab_ro02_ec
+        unit_of_measurement: "µS/cm"
+        state_class: measurement
+        state: "{{ (states('sensor.ro02_ec') | float(0) + 0.0) | round(2) }}"
+        availability: "{{ is_number(states('sensor.ro02_ec')) }}"
+      - name: "SmartLab ro03 EC"
+        unique_id: smartlab_ro03_ec
+        unit_of_measurement: "µS/cm"
+        state_class: measurement
+        state: "{{ (states('sensor.ro03_ec') | float(0) + 0.0) | round(2) }}"
+        availability: "{{ is_number(states('sensor.ro03_ec')) }}"
+  - binary_sensor:
+      - name: "Cảnh báo tl01"
+        unique_id: smartlab_tl01_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl01_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 01"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl01_nhiet_do') }}"
+      - name: "Mất tín hiệu tl01"
+        unique_id: smartlab_tl01_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl01_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 01"
+      - name: "Cảnh báo tl02"
+        unique_id: smartlab_tl02_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl02_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 02"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl02_nhiet_do') }}"
+      - name: "Mất tín hiệu tl02"
+        unique_id: smartlab_tl02_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl02_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 02"
+      - name: "Cảnh báo tl03"
+        unique_id: smartlab_tl03_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl03_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 03"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl03_nhiet_do') }}"
+      - name: "Mất tín hiệu tl03"
+        unique_id: smartlab_tl03_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl03_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 03"
+      - name: "Cảnh báo tl04"
+        unique_id: smartlab_tl04_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl04_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 04"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl04_nhiet_do') }}"
+      - name: "Mất tín hiệu tl04"
+        unique_id: smartlab_tl04_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl04_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 04"
+      - name: "Cảnh báo tl05"
+        unique_id: smartlab_tl05_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl05_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 05"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl05_nhiet_do') }}"
+      - name: "Mất tín hiệu tl05"
+        unique_id: smartlab_tl05_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl05_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 05"
+      - name: "Cảnh báo tl06"
+        unique_id: smartlab_tl06_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl06_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 06"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl06_nhiet_do') }}"
+      - name: "Mất tín hiệu tl06"
+        unique_id: smartlab_tl06_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl06_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 06"
+      - name: "Cảnh báo tl07"
+        unique_id: smartlab_tl07_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl07_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 07"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl07_nhiet_do') }}"
+      - name: "Mất tín hiệu tl07"
+        unique_id: smartlab_tl07_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl07_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 07"
+      - name: "Cảnh báo tl08"
+        unique_id: smartlab_tl08_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl08_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 08"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl08_nhiet_do') }}"
+      - name: "Mất tín hiệu tl08"
+        unique_id: smartlab_tl08_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl08_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 08"
+      - name: "Cảnh báo tl09"
+        unique_id: smartlab_tl09_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl09_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 09"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl09_nhiet_do') }}"
+      - name: "Mất tín hiệu tl09"
+        unique_id: smartlab_tl09_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl09_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 09"
+      - name: "Cảnh báo tl10"
+        unique_id: smartlab_tl10_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl10_nhiet_do') %}{% if is_number(v) and (v | float < 2.0 or v | float > 8.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ lạnh 10"
+          nguong: "nhiệt độ 2…8"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl10_nhiet_do') }}"
+      - name: "Mất tín hiệu tl10"
+        unique_id: smartlab_tl10_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl10_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ lạnh 10"
+      - name: "Cảnh báo tl11"
+        unique_id: smartlab_tl11_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl11_nhiet_do') %}{% if is_number(v) and (v | float < -25.0 or v | float > -15.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ đông 11"
+          nguong: "nhiệt độ -25…-15"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl11_nhiet_do') }}"
+      - name: "Mất tín hiệu tl11"
+        unique_id: smartlab_tl11_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl11_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ đông 11"
+      - name: "Cảnh báo tl12"
+        unique_id: smartlab_tl12_alarm
+        device_class: problem
+        delay_on: {minutes: 15}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_tl12_nhiet_do') %}{% if is_number(v) and (v | float < -25.0 or v | float > -15.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Tủ đông 12"
+          nguong: "nhiệt độ -25…-15"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_tl12_nhiet_do') }}"
+      - name: "Mất tín hiệu tl12"
+        unique_id: smartlab_tl12_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.tl12_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Tủ đông 12"
+      - name: "Cảnh báo mt01"
+        unique_id: smartlab_mt01_alarm
+        device_class: problem
+        delay_on: {minutes: 30}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_mt01_nhiet_do') %}{% if is_number(v) and (v | float < 18.0 or v | float > 30.0) %}{% set ns.bad = true %}{% endif %}{% set v = states('sensor.smartlab_mt01_do_am') %}{% if is_number(v) and (v | float < 30.0 or v | float > 75.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Phòng XN 01"
+          nguong: "nhiệt độ 18…30; độ ẩm 30…75"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_mt01_nhiet_do') }}, độ ẩm {{ states('sensor.smartlab_mt01_do_am') }}"
+      - name: "Mất tín hiệu mt01"
+        unique_id: smartlab_mt01_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.mt01_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Phòng XN 01"
+      - name: "Cảnh báo mt02"
+        unique_id: smartlab_mt02_alarm
+        device_class: problem
+        delay_on: {minutes: 30}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_mt02_nhiet_do') %}{% if is_number(v) and (v | float < 18.0 or v | float > 30.0) %}{% set ns.bad = true %}{% endif %}{% set v = states('sensor.smartlab_mt02_do_am') %}{% if is_number(v) and (v | float < 30.0 or v | float > 75.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Phòng XN 02"
+          nguong: "nhiệt độ 18…30; độ ẩm 30…75"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_mt02_nhiet_do') }}, độ ẩm {{ states('sensor.smartlab_mt02_do_am') }}"
+      - name: "Mất tín hiệu mt02"
+        unique_id: smartlab_mt02_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.mt02_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Phòng XN 02"
+      - name: "Cảnh báo mt03"
+        unique_id: smartlab_mt03_alarm
+        device_class: problem
+        delay_on: {minutes: 30}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_mt03_nhiet_do') %}{% if is_number(v) and (v | float < 18.0 or v | float > 30.0) %}{% set ns.bad = true %}{% endif %}{% set v = states('sensor.smartlab_mt03_do_am') %}{% if is_number(v) and (v | float < 30.0 or v | float > 75.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Phòng XN 03"
+          nguong: "nhiệt độ 18…30; độ ẩm 30…75"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_mt03_nhiet_do') }}, độ ẩm {{ states('sensor.smartlab_mt03_do_am') }}"
+      - name: "Mất tín hiệu mt03"
+        unique_id: smartlab_mt03_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.mt03_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Phòng XN 03"
+      - name: "Cảnh báo mt04"
+        unique_id: smartlab_mt04_alarm
+        device_class: problem
+        delay_on: {minutes: 30}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_mt04_nhiet_do') %}{% if is_number(v) and (v | float < 18.0 or v | float > 30.0) %}{% set ns.bad = true %}{% endif %}{% set v = states('sensor.smartlab_mt04_do_am') %}{% if is_number(v) and (v | float < 30.0 or v | float > 75.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Phòng XN 04"
+          nguong: "nhiệt độ 18…30; độ ẩm 30…75"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_mt04_nhiet_do') }}, độ ẩm {{ states('sensor.smartlab_mt04_do_am') }}"
+      - name: "Mất tín hiệu mt04"
+        unique_id: smartlab_mt04_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.mt04_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Phòng XN 04"
+      - name: "Cảnh báo mt05"
+        unique_id: smartlab_mt05_alarm
+        device_class: problem
+        delay_on: {minutes: 30}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_mt05_nhiet_do') %}{% if is_number(v) and (v | float < 18.0 or v | float > 30.0) %}{% set ns.bad = true %}{% endif %}{% set v = states('sensor.smartlab_mt05_do_am') %}{% if is_number(v) and (v | float < 30.0 or v | float > 75.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Phòng XN 05"
+          nguong: "nhiệt độ 18…30; độ ẩm 30…75"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_mt05_nhiet_do') }}, độ ẩm {{ states('sensor.smartlab_mt05_do_am') }}"
+      - name: "Mất tín hiệu mt05"
+        unique_id: smartlab_mt05_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.mt05_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Phòng XN 05"
+      - name: "Cảnh báo mt06"
+        unique_id: smartlab_mt06_alarm
+        device_class: problem
+        delay_on: {minutes: 30}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_mt06_nhiet_do') %}{% if is_number(v) and (v | float < 18.0 or v | float > 30.0) %}{% set ns.bad = true %}{% endif %}{% set v = states('sensor.smartlab_mt06_do_am') %}{% if is_number(v) and (v | float < 30.0 or v | float > 75.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Phòng XN 06"
+          nguong: "nhiệt độ 18…30; độ ẩm 30…75"
+          gia_tri: "nhiệt độ {{ states('sensor.smartlab_mt06_nhiet_do') }}, độ ẩm {{ states('sensor.smartlab_mt06_do_am') }}"
+      - name: "Mất tín hiệu mt06"
+        unique_id: smartlab_mt06_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.mt06_raw_temperature') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Phòng XN 06"
+      - name: "Cảnh báo ro01"
+        unique_id: smartlab_ro01_alarm
+        device_class: problem
+        delay_on: {minutes: 10}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_ro01_ec') %}{% if is_number(v) and (v | float < 0.0 or v | float > 10.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Máy RO 01"
+          nguong: "EC 0…10"
+          gia_tri: "EC {{ states('sensor.smartlab_ro01_ec') }}"
+      - name: "Mất tín hiệu ro01"
+        unique_id: smartlab_ro01_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.ro01_ec') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Máy RO 01"
+      - name: "Cảnh báo ro02"
+        unique_id: smartlab_ro02_alarm
+        device_class: problem
+        delay_on: {minutes: 10}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_ro02_ec') %}{% if is_number(v) and (v | float < 0.0 or v | float > 10.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Máy RO 02"
+          nguong: "EC 0…10"
+          gia_tri: "EC {{ states('sensor.smartlab_ro02_ec') }}"
+      - name: "Mất tín hiệu ro02"
+        unique_id: smartlab_ro02_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.ro02_ec') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Máy RO 02"
+      - name: "Cảnh báo ro03"
+        unique_id: smartlab_ro03_alarm
+        device_class: problem
+        delay_on: {minutes: 10}
+        delay_off: {minutes: 2}
+        state: "{% set ns = namespace(bad=false) %}{% set v = states('sensor.smartlab_ro03_ec') %}{% if is_number(v) and (v | float < 0.0 or v | float > 10.0) %}{% set ns.bad = true %}{% endif %}{{ ns.bad }}"
+        attributes:
+          diem_do: "Máy RO 03"
+          nguong: "EC 0…10"
+          gia_tri: "EC {{ states('sensor.smartlab_ro03_ec') }}"
+      - name: "Mất tín hiệu ro03"
+        unique_id: smartlab_ro03_offline
+        device_class: problem
+        delay_on: {minutes: 60}
+        state: "{{ states('sensor.ro03_ec') in [\"unavailable\", \"unknown\"] }}"
+        attributes:
+          diem_do: "Máy RO 03"
+
+group:
+  smartlab_alarms:
+    name: SmartLab cảnh báo ngưỡng
+    entities:
+      - binary_sensor.canh_bao_tl01
+      - binary_sensor.canh_bao_tl02
+      - binary_sensor.canh_bao_tl03
+      - binary_sensor.canh_bao_tl04
+      - binary_sensor.canh_bao_tl05
+      - binary_sensor.canh_bao_tl06
+      - binary_sensor.canh_bao_tl07
+      - binary_sensor.canh_bao_tl08
+      - binary_sensor.canh_bao_tl09
+      - binary_sensor.canh_bao_tl10
+      - binary_sensor.canh_bao_tl11
+      - binary_sensor.canh_bao_tl12
+      - binary_sensor.canh_bao_mt01
+      - binary_sensor.canh_bao_mt02
+      - binary_sensor.canh_bao_mt03
+      - binary_sensor.canh_bao_mt04
+      - binary_sensor.canh_bao_mt05
+      - binary_sensor.canh_bao_mt06
+      - binary_sensor.canh_bao_ro01
+      - binary_sensor.canh_bao_ro02
+      - binary_sensor.canh_bao_ro03
+  smartlab_offline:
+    name: SmartLab mất tín hiệu
+    entities:
+      - binary_sensor.mat_tin_hieu_tl01
+      - binary_sensor.mat_tin_hieu_tl02
+      - binary_sensor.mat_tin_hieu_tl03
+      - binary_sensor.mat_tin_hieu_tl04
+      - binary_sensor.mat_tin_hieu_tl05
+      - binary_sensor.mat_tin_hieu_tl06
+      - binary_sensor.mat_tin_hieu_tl07
+      - binary_sensor.mat_tin_hieu_tl08
+      - binary_sensor.mat_tin_hieu_tl09
+      - binary_sensor.mat_tin_hieu_tl10
+      - binary_sensor.mat_tin_hieu_tl11
+      - binary_sensor.mat_tin_hieu_tl12
+      - binary_sensor.mat_tin_hieu_mt01
+      - binary_sensor.mat_tin_hieu_mt02
+      - binary_sensor.mat_tin_hieu_mt03
+      - binary_sensor.mat_tin_hieu_mt04
+      - binary_sensor.mat_tin_hieu_mt05
+      - binary_sensor.mat_tin_hieu_mt06
+      - binary_sensor.mat_tin_hieu_ro01
+      - binary_sensor.mat_tin_hieu_ro02
+      - binary_sensor.mat_tin_hieu_ro03
+
+automation:
+  - id: smartlab_canh_bao_nguong
+    alias: SmartLab – báo Zalo khi vượt ngưỡng / hết vượt ngưỡng
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.canh_bao_tl01
+          - binary_sensor.canh_bao_tl02
+          - binary_sensor.canh_bao_tl03
+          - binary_sensor.canh_bao_tl04
+          - binary_sensor.canh_bao_tl05
+          - binary_sensor.canh_bao_tl06
+          - binary_sensor.canh_bao_tl07
+          - binary_sensor.canh_bao_tl08
+          - binary_sensor.canh_bao_tl09
+          - binary_sensor.canh_bao_tl10
+          - binary_sensor.canh_bao_tl11
+          - binary_sensor.canh_bao_tl12
+          - binary_sensor.canh_bao_mt01
+          - binary_sensor.canh_bao_mt02
+          - binary_sensor.canh_bao_mt03
+          - binary_sensor.canh_bao_mt04
+          - binary_sensor.canh_bao_mt05
+          - binary_sensor.canh_bao_mt06
+          - binary_sensor.canh_bao_ro01
+          - binary_sensor.canh_bao_ro02
+          - binary_sensor.canh_bao_ro03
+        from: ["off", "on"]
+        to: ["on", "off"]
+    action:
+      - action: script.smartlab_zalo
+        data:
+          message: >-
+            {% if trigger.to_state.state == 'on' %}🔴 CẢNH BÁO {{ trigger.to_state.attributes.diem_do }}:
+            {{ trigger.to_state.attributes.gia_tri }} (ngưỡng {{ trigger.to_state.attributes.nguong }}).
+            Đề nghị kiểm tra ngay.{% else %}✅ ĐÃ BÌNH THƯỜNG {{ trigger.to_state.attributes.diem_do }}:
+            {{ trigger.to_state.attributes.gia_tri }}.{% endif %}
+            ({{ now().strftime('%H:%M %d/%m') }})
+
+  - id: smartlab_mat_tin_hieu
+    alias: SmartLab – báo Zalo khi cảm biến mất tín hiệu
+    mode: queued
+    trigger:
+      - platform: state
+        entity_id:
+          - binary_sensor.mat_tin_hieu_tl01
+          - binary_sensor.mat_tin_hieu_tl02
+          - binary_sensor.mat_tin_hieu_tl03
+          - binary_sensor.mat_tin_hieu_tl04
+          - binary_sensor.mat_tin_hieu_tl05
+          - binary_sensor.mat_tin_hieu_tl06
+          - binary_sensor.mat_tin_hieu_tl07
+          - binary_sensor.mat_tin_hieu_tl08
+          - binary_sensor.mat_tin_hieu_tl09
+          - binary_sensor.mat_tin_hieu_tl10
+          - binary_sensor.mat_tin_hieu_tl11
+          - binary_sensor.mat_tin_hieu_tl12
+          - binary_sensor.mat_tin_hieu_mt01
+          - binary_sensor.mat_tin_hieu_mt02
+          - binary_sensor.mat_tin_hieu_mt03
+          - binary_sensor.mat_tin_hieu_mt04
+          - binary_sensor.mat_tin_hieu_mt05
+          - binary_sensor.mat_tin_hieu_mt06
+          - binary_sensor.mat_tin_hieu_ro01
+          - binary_sensor.mat_tin_hieu_ro02
+          - binary_sensor.mat_tin_hieu_ro03
+        from: ["off", "on"]
+        to: ["on", "off"]
+    action:
+      - action: script.smartlab_zalo
+        data:
+          message: >-
+            {% if trigger.to_state.state == 'on' %}⚠️ MẤT TÍN HIỆU {{ trigger.to_state.attributes.diem_do }} quá 60 phút
+            (kiểm tra pin / sóng Zigbee / nguồn).{% else %}✅ Có tín hiệu lại: {{ trigger.to_state.attributes.diem_do }}.{% endif %}
+            ({{ now().strftime('%H:%M %d/%m') }})
+
+  - id: smartlab_nhac_lai
+    alias: SmartLab – nhắc lại mỗi 30 phút khi còn cảnh báo
+    trigger:
+      - platform: time_pattern
+        minutes: "/30"
+    condition:
+      - condition: state
+        entity_id: group.smartlab_alarms
+        state: "on"
+    action:
+      - action: script.smartlab_zalo
+        data:
+          message: >-
+            🔁 VẪN ĐANG CẢNH BÁO:
+            {% for e in expand('group.smartlab_alarms') | selectattr('state', 'eq', 'on') %}
+            • {{ e.attributes.diem_do }}: {{ e.attributes.gia_tri }} (từ {{ as_local(e.last_changed).strftime('%H:%M') }})
+            {% endfor %}
+
+  - id: smartlab_ghi_so_dinh_ky
+    alias: SmartLab – ghi sổ theo dõi nhiệt độ/độ ẩm/EC (ISO 15189)
+    trigger:
+      - platform: time
+        at: ["07:30:00", "13:30:00", "19:30:00"]
+    action:
+      - action: script.smartlab_ghi_so
+
+script:
+  smartlab_ghi_so:
+    alias: SmartLab ghi sổ theo dõi
+    sequence:
+      - action: notify.send_message
+        target:
+          entity_id: notify.smartlab_so_theo_doi
+        data:
+          message: >-
+            {{ now().strftime('%Y-%m-%d %H:%M') }} | Tủ lạnh 01: {{ states('sensor.smartlab_tl01_nhiet_do') }} °C | Tủ lạnh 02: {{ states('sensor.smartlab_tl02_nhiet_do') }} °C | Tủ lạnh 03: {{ states('sensor.smartlab_tl03_nhiet_do') }} °C | Tủ lạnh 04: {{ states('sensor.smartlab_tl04_nhiet_do') }} °C | Tủ lạnh 05: {{ states('sensor.smartlab_tl05_nhiet_do') }} °C | Tủ lạnh 06: {{ states('sensor.smartlab_tl06_nhiet_do') }} °C | Tủ lạnh 07: {{ states('sensor.smartlab_tl07_nhiet_do') }} °C | Tủ lạnh 08: {{ states('sensor.smartlab_tl08_nhiet_do') }} °C | Tủ lạnh 09: {{ states('sensor.smartlab_tl09_nhiet_do') }} °C | Tủ lạnh 10: {{ states('sensor.smartlab_tl10_nhiet_do') }} °C | Tủ đông 11: {{ states('sensor.smartlab_tl11_nhiet_do') }} °C | Tủ đông 12: {{ states('sensor.smartlab_tl12_nhiet_do') }} °C | Phòng XN 01: {{ states('sensor.smartlab_mt01_nhiet_do') }} °C, {{ states('sensor.smartlab_mt01_do_am') }} % | Phòng XN 02: {{ states('sensor.smartlab_mt02_nhiet_do') }} °C, {{ states('sensor.smartlab_mt02_do_am') }} % | Phòng XN 03: {{ states('sensor.smartlab_mt03_nhiet_do') }} °C, {{ states('sensor.smartlab_mt03_do_am') }} % | Phòng XN 04: {{ states('sensor.smartlab_mt04_nhiet_do') }} °C, {{ states('sensor.smartlab_mt04_do_am') }} % | Phòng XN 05: {{ states('sensor.smartlab_mt05_nhiet_do') }} °C, {{ states('sensor.smartlab_mt05_do_am') }} % | Phòng XN 06: {{ states('sensor.smartlab_mt06_nhiet_do') }} °C, {{ states('sensor.smartlab_mt06_do_am') }} % | Máy RO 01: {{ states('sensor.smartlab_ro01_ec') }} µS/cm | Máy RO 02: {{ states('sensor.smartlab_ro02_ec') }} µS/cm | Máy RO 03: {{ states('sensor.smartlab_ro03_ec') }} µS/cm

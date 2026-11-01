@@ -1,0 +1,22 @@
+id,name,kind,t_min,t_max,h_min,h_max,t_offset,h_offset,delay_min
+tl01,Tủ lạnh 01,fridge,2,8,,,0,0,15
+tl02,Tủ lạnh 02,fridge,2,8,,,0,0,15
+tl03,Tủ lạnh 03,fridge,2,8,,,0,0,15
+tl04,Tủ lạnh 04,fridge,2,8,,,0,0,15
+tl05,Tủ lạnh 05,fridge,2,8,,,0,0,15
+tl06,Tủ lạnh 06,fridge,2,8,,,0,0,15
+tl07,Tủ lạnh 07,fridge,2,8,,,0,0,15
+tl08,Tủ lạnh 08,fridge,2,8,,,0,0,15
+tl09,Tủ lạnh 09,fridge,2,8,,,0,0,15
+tl10,Tủ lạnh 10,fridge,2,8,,,0,0,15
+tl11,Tủ đông 11,fridge,-25,-15,,,0,0,15
+tl12,Tủ đông 12,fridge,-25,-15,,,0,0,15
+mt01,Phòng XN 01,room,18,30,30,75,0,0,30
+mt02,Phòng XN 02,room,18,30,30,75,0,0,30
+mt03,Phòng XN 03,room,18,30,30,75,0,0,30
+mt04,Phòng XN 04,room,18,30,30,75,0,0,30
+mt05,Phòng XN 05,room,18,30,30,75,0,0,30
+mt06,Phòng XN 06,room,18,30,30,75,0,0,30
+ro01,Máy RO 01,ro,0,10,,,0,0,10
+ro02,Máy RO 02,ro,0,10,,,0,0,10
+ro03,Máy RO 03,ro,0,10,,,0,0,10

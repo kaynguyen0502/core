@@ -1,0 +1,91 @@
+# SmartLab – phần dùng chung: gửi Zalo, nhịp tim máy chủ, mất điện (UPS), khởi động lại.
+# Viết tay. Phần theo từng điểm đo nằm ở smartlab_points.yaml (tự sinh).
+
+rest_command:
+  # Zalo Bot API (kiểu Telegram): POST {chat_id, text} tới .../bot<TOKEN>/sendMessage
+  # Toàn bộ URL (có token) để trong secrets.yaml, không commit.
+  smartlab_zalo_send:
+    url: !secret zalo_bot_send_url
+    method: POST
+    content_type: "application/json"
+    timeout: 15
+    payload: '{"chat_id": {{ chat_id | tojson }}, "text": {{ message | tojson }}}'
+
+  # Nhịp tim gửi ra máy chủ giám sát bên ngoài (watchdog/). Nếu khoa mất mạng
+  # hoặc mất điện kéo dài, watchdog sẽ tự gửi Zalo vì không còn nhận nhịp tim.
+  smartlab_heartbeat:
+    url: !secret watchdog_heartbeat_url
+    method: POST
+    timeout: 10
+
+script:
+  smartlab_zalo:
+    alias: SmartLab – gửi Zalo tới Trưởng khoa + nhóm trực
+    mode: queued
+    fields:
+      message:
+        description: Nội dung tin nhắn
+    variables:
+      chat_ids: !secret zalo_chat_ids
+    sequence:
+      - repeat:
+          for_each: "{{ chat_ids }}"
+          sequence:
+            - action: rest_command.smartlab_zalo_send
+              continue_on_error: true
+              data:
+                chat_id: "{{ repeat.item }}"
+                message: "[SmartLab HS] {{ message }}"
+      # Lưu lại mọi tin cảnh báo vào sổ để truy vết khi đánh giá ISO 15189
+      - action: notify.send_message
+        continue_on_error: true
+        target:
+          entity_id: notify.smartlab_nhat_ky_canh_bao
+        data:
+          message: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }} | {{ message }}"
+
+automation:
+  - id: smartlab_heartbeat
+    alias: SmartLab – nhịp tim ra watchdog mỗi phút
+    trigger:
+      - platform: time_pattern
+        minutes: "/1"
+    action:
+      - action: rest_command.smartlab_heartbeat
+        continue_on_error: true
+
+  - id: smartlab_khoi_dong
+    alias: SmartLab – báo khi máy chủ khởi động lại
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay: "00:02:00"   # chờ mạng/Zigbee lên
+      - action: script.smartlab_zalo
+        data:
+          message: >-
+            ℹ️ Máy chủ SmartLab vừa khởi động lại lúc {{ now().strftime('%H:%M %d/%m') }}
+            (có thể do mất điện kéo dài hoặc cập nhật). Dữ liệu tiếp tục được ghi.
+
+  # Mất điện lưới: máy chủ + router + USB Zigbee chạy trên UPS, UPS cắm USB vào máy chủ
+  # và thêm integration "Network UPS Tools (NUT)". Đổi entity bên dưới cho đúng tên UPS.
+  - id: smartlab_mat_dien
+    alias: SmartLab – mất điện / có điện lại (UPS)
+    mode: queued
+    trigger:
+      - platform: template
+        value_template: "{{ 'OB' in states('sensor.ups_status_data') }}"
+        id: mat_dien
+        for: "00:01:00"
+      - platform: template
+        value_template: "{{ 'OL' in states('sensor.ups_status_data') }}"
+        id: co_dien
+        for: "00:01:00"
+    action:
+      - action: script.smartlab_zalo
+        data:
+          message: >-
+            {% if trigger.id == 'mat_dien' %}⚡ MẤT ĐIỆN LƯỚI tại khoa – hệ thống đang chạy UPS
+            (pin {{ states('sensor.ups_battery_charge') }}%). Kiểm tra tủ lạnh/tủ đông.
+            {% else %}🔌 Đã có điện lưới trở lại.{% endif %}
+            ({{ now().strftime('%H:%M %d/%m') }})
