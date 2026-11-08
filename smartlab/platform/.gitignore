@@ -1,0 +1,9 @@
+.env
+*.db
+zigbee2mqtt/configuration.yaml
+zigbee2mqtt/database.db*
+zigbee2mqtt/coordinator_backup.json
+zigbee2mqtt/log/
+mosquitto/passwd
+__pycache__/
+.pytest_cache/

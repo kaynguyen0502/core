@@ -1,0 +1,56 @@
+# SmartLab – chạy trên máy chủ tại khoa (Ubuntu Server + Docker).
+# Khởi động:  cp .env.example .env  (điền mật khẩu)  &&  docker compose up -d
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: smartlab
+      MYSQL_USER: smartlab
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    volumes: [mysql-data:/var/lib/mysql]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      retries: 10
+
+  mosquitto:
+    image: eclipse-mosquitto:2
+    restart: unless-stopped
+    ports: ["1883:1883"]
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto/passwd:/mosquitto/config/passwd:ro
+      - mosquitto-data:/mosquitto/data
+
+  zigbee2mqtt:
+    image: koenkk/zigbee2mqtt:latest
+    restart: unless-stopped
+    depends_on: [mosquitto]
+    ports: ["8080:8080"]            # giao diện ghép nối, đặt tên cảm biến
+    volumes: [./zigbee2mqtt:/app/data]
+    devices:
+      - /dev/serial/by-id/usb-ITead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_REPLACE_ME-if00-port0:/dev/ttyUSB0
+    environment: [TZ=Asia/Ho_Chi_Minh]
+
+  web:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+    env_file: .env
+    ports: ["8000:8000"]            # TV: http://<IP máy chủ>:8000/tv ; danh mục: /catalog
+
+  worker:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      mysql: {condition: service_healthy}
+      mosquitto: {condition: service_started}
+    env_file: .env
+    command: ["python", "-m", "smartlab.worker"]
+
+volumes:
+  mysql-data:
+  mosquitto-data:

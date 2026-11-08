@@ -1,0 +1,18 @@
+# Sao chép thành configuration.yaml. Đặt tên thiết bị theo quy tắc: hs/tl01, hs/mt01, hs/rp01 ...
+homeassistant: false
+frontend:
+  port: 8080
+mqtt:
+  base_topic: zigbee2mqtt
+  server: mqtt://mosquitto:1883
+  user: zigbee2mqtt
+  password: doi-mat-khau-mqtt
+serial:
+  port: /dev/ttyUSB0
+  adapter: zstack
+advanced:
+  channel: 25            # Phòng CNTT xác nhận kênh Wi-Fi để tránh trùng
+  network_key: GENERATE  # tự sinh khóa mã hóa ngẫu nhiên lần đầu
+  pan_id: GENERATE
+  last_seen: ISO_8601
+devices: {}

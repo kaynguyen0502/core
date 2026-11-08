@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Danh mục điểm đo – SmartLab</title>
+<style>
+body{margin:0;background:#f6f8fb;color:#142033;font-family:Inter,"Segoe UI",system-ui,sans-serif}
+.wrap{max-width:1500px;margin:0 auto;padding:24px 16px;display:flex;flex-direction:column;gap:18px}
+h1{margin:0;font-size:28px}p{margin:0;color:#3d4b61}
+.box{background:#fff;border:1px solid #d8e0ec;border-radius:12px;overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:14px}
+th{background:#e9eff8;text-align:left;padding:8px;white-space:nowrap}
+td{padding:6px 8px;border-top:1px solid #e3e9f2;vertical-align:middle}
+input,select{font:inherit;padding:5px 6px;border:1px solid #c3cedd;border-radius:6px;width:100%;box-sizing:border-box;min-width:60px}
+input.n{width:72px;min-width:72px}
+button{font:inherit;padding:6px 14px;border-radius:8px;border:0;background:#1d5fd1;color:#fff;cursor:pointer;min-height:36px}
+.code{font-weight:800}
+.log td{font-size:13px;color:#3d4b61}
+a{color:#1d5fd1}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Danh mục điểm đo</h1>
+  <p>Sửa tên hiển thị, topic, ngưỡng rồi bấm Lưu ở từng dòng. Mã điểm đo không đổi sau nghiệm thu. Mọi thay đổi được ghi nhật ký bên dưới. <a href="/tv">Xem màn hình TV</a></p>
+  <div class="box">
+    <table>
+      <thead><tr>
+        <th>Mã</th><th>Tên hiển thị</th><th>Nhóm</th><th>Nguồn</th><th>MQTT topic</th>
+        <th>Nhiệt độ min</th><th>max</th><th>Độ ẩm min</th><th>max</th><th>EC max</th>
+        <th>Trễ báo (phút)</th><th>Mất tín hiệu sau (phút)</th><th>Thứ tự</th><th>Hoạt động</th><th></th>
+      </tr></thead>
+      <tbody>
+      {% for p in points %}
+      <tr>
+        <td class="code">{{ p.code }}</td>
+        <td><input form="f-{{ p.code }}" name="name" value="{{ p.name }}" aria-label="Tên {{ p.code }}"></td>
+        <td><select form="f-{{ p.code }}" name="group" aria-label="Nhóm {{ p.code }}">{% for k, v in groups.items() %}<option value="{{ k }}" {% if k == p.group %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></td>
+        <td><select form="f-{{ p.code }}" name="source" aria-label="Nguồn {{ p.code }}">{% for k, v in sources.items() %}<option value="{{ k }}" {% if k == p.source %}selected{% endif %}>{{ v }}</option>{% endfor %}</select></td>
+        <td><input form="f-{{ p.code }}" name="topic" value="{{ p.topic }}" aria-label="Topic {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="temp_min" value="{{ p.temp_min if p.temp_min is not none else '' }}" aria-label="Nhiệt độ min {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="temp_max" value="{{ p.temp_max if p.temp_max is not none else '' }}" aria-label="Nhiệt độ max {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="hum_min" value="{{ p.hum_min if p.hum_min is not none else '' }}" aria-label="Độ ẩm min {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="hum_max" value="{{ p.hum_max if p.hum_max is not none else '' }}" aria-label="Độ ẩm max {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="ec_max" value="{{ p.ec_max if p.ec_max is not none else '' }}" aria-label="EC max {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="alarm_delay_min" value="{{ p.alarm_delay_min }}" aria-label="Trễ báo {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="offline_after_min" value="{{ p.offline_after_min }}" aria-label="Mất tín hiệu sau {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" class="n" name="sort" value="{{ p.sort }}" aria-label="Thứ tự {{ p.code }}"></td>
+        <td><input form="f-{{ p.code }}" type="checkbox" name="active" value="1" {% if p.active %}checked{% endif %} aria-label="Hoạt động {{ p.code }}" style="width:auto;min-width:0"></td>
+        <td><form id="f-{{ p.code }}" method="post" action="/catalog/{{ p.code }}"><button type="submit">Lưu</button></form></td>
+      </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <h1 style="font-size:20px">Nhật ký thay đổi (30 lần gần nhất)</h1>
+  <div class="box">
+    <table class="log">
+      <thead><tr><th>Thời gian</th><th>Người sửa</th><th>Thao tác</th><th>Nội dung</th></tr></thead>
+      <tbody>
+      {% for l in log %}
+      <tr><td>{{ local(l.ts).strftime('%d/%m/%Y %H:%M') }}</td><td>{{ l.user }}</td><td>{{ l.action }}</td><td>{{ l.detail }}</td></tr>
+      {% else %}
+      <tr><td colspan="4">Chưa có thay đổi.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

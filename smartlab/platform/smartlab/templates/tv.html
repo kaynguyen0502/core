@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SmartLab – {{ site }}</title>
+<style>
+:root{--bg:#0b111c;--panel:#101828;--tile:#141e30;--line:#2b3a52;--ink:#eef3fa;--mute:#a9b8cf;--ok:#6ee7b0;--okbg:#0f3326;
+--warn:#f2a33a;--warnink:#ffc46b;--warnbg:#4a3008;--alarm:#ff5a5a;--alarmink:#ff8a8a;--off:#4a5568;--offbg:#2d3748}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,"Segoe UI",system-ui,sans-serif}
+.wrap{min-height:100vh;padding:18px 22px;display:flex;flex-direction:column;gap:14px}
+header{display:flex;align-items:center;justify-content:space-between;gap:20px;flex-wrap:wrap}
+.brand b{font-size:30px;font-weight:800}.brand div{color:var(--mute);font-size:17px}
+.chips{display:flex;gap:10px;flex-wrap:wrap}
+.chip{padding:9px 16px;border-radius:999px;font-size:18px;font-weight:700;background:#16243a;color:#cfe0f5}
+.chip.ok{background:var(--okbg);color:var(--ok)}.chip.warn{background:var(--warnbg);color:var(--warnink)}
+.chip.alarm{background:var(--alarm);color:#1b0505}.chip.offline{background:var(--offbg);color:#d5dde8}
+.clock{text-align:right}.clock b{font-size:40px;font-variant-numeric:tabular-nums}.clock div{color:var(--mute)}
+.banner{display:none;align-items:center;gap:16px;padding:12px 18px;border-radius:12px;background:#3a0f14;border:2px solid var(--alarm);font-size:21px;font-weight:600;color:#ffe1e1}
+.banner.on{display:flex}.banner b{color:var(--alarmink);font-weight:800}
+.main{display:flex;gap:16px;flex-wrap:wrap}
+.panel{background:var(--panel);border-radius:16px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.panel h2{margin:0;font-size:22px}.panel .sub{color:var(--mute);font-size:16px}
+.ph{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}
+.grid{display:grid;gap:12px}
+.left{flex:999 1 900px}.right{flex:1 1 560px;display:flex;flex-direction:column;gap:16px}
+.g4{grid-template-columns:repeat(4,minmax(0,1fr))}.g3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.g2{grid-template-columns:repeat(2,minmax(0,1fr))}.g6{grid-template-columns:repeat(6,minmax(0,1fr))}
+@media (max-width:1100px){.g4,.g6{grid-template-columns:repeat(2,minmax(0,1fr))}.g3{grid-template-columns:repeat(1,minmax(0,1fr))}}
+.tile{background:var(--tile);border:2px solid var(--line);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;min-width:0}
+.tile.warn{border-color:var(--warn);background:#1f1a10}.tile.alarm{border-color:var(--alarm);background:#2a1216}
+.tile.offline{border-color:var(--off);background:#141a24}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.code{font-size:19px;font-weight:800;color:#cfe0f5;letter-spacing:.03em}
+.badge{font-size:13px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--okbg);color:var(--ok);white-space:nowrap}
+.warn .badge{background:var(--warnbg);color:var(--warnink)}.alarm .badge{background:var(--alarm);color:#1b0505}
+.offline .badge{background:var(--offbg);color:#d5dde8}
+.name{font-size:15px;color:#dbe4f0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.val{white-space:nowrap;font-size:44px;font-weight:800;line-height:1;font-variant-numeric:tabular-nums}
+.warn .val{color:var(--warnink)}.alarm .val{color:var(--alarmink)}.offline .val{color:#8a97aa}
+.unit{font-size:18px;color:var(--mute);font-weight:500}
+.note{font-size:13px;color:var(--mute)}
+.st{align-self:flex-start;padding:5px 12px;border-radius:999px;font-size:19px;font-weight:800;background:#1d2b44;color:#bcd0ea}
+.st.run{background:var(--okbg);color:var(--ok)}.st.err{background:var(--alarm);color:#1b0505}
+.kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}
+.kv span{display:block;font-size:13px;color:var(--mute)}.kv b{font-size:21px;font-variant-numeric:tabular-nums}
+footer{display:flex;gap:22px;flex-wrap:wrap;color:var(--mute);font-size:15px;align-items:center}
+.lg{display:inline-flex;align-items:center;gap:8px}.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand"><b>SmartLab</b><div>{{ site }}</div></div>
+    <div class="chips" id="chips"></div>
+    <div class="clock"><b id="clock">--:--</b><div id="date"></div></div>
+  </header>
+  <div class="banner" id="banner" role="alert"></div>
+  <div class="main">
+    <section class="panel left" aria-label="Tủ bảo quản">
+      <div class="ph"><h2>Tủ bảo quản</h2><span class="sub">Biểu đồ nhỏ: 24 giờ</span></div>
+      <div class="grid g4" id="fridges"></div>
+    </section>
+    <div class="right">
+      <section class="panel" aria-label="Nước RO">
+        <div class="ph"><h2>Nước RO – độ dẫn điện</h2></div>
+        <div class="grid g3" id="ro"></div>
+      </section>
+      <section class="panel" aria-label="Máy xét nghiệm">
+        <h2>Máy xét nghiệm</h2>
+        <div class="grid g2" id="xn"></div>
+      </section>
+    </div>
+  </div>
+  <section class="panel" aria-label="Môi trường phòng xét nghiệm">
+    <div class="ph"><h2>Môi trường phòng xét nghiệm</h2></div>
+    <div class="grid g6" id="rooms"></div>
+  </section>
+  <footer>
+    <span class="lg"><i style="background:var(--line)"></i>Bình thường</span>
+    <span class="lg"><i style="background:var(--warn)"></i>Gần ngưỡng / đang xác nhận</span>
+    <span class="lg"><i style="background:var(--alarm)"></i>Vượt ngưỡng (đã báo Zalo)</span>
+    <span class="lg"><i style="background:var(--off)"></i>Mất tín hiệu</span>
+    <span style="margin-left:auto" id="updated"></span>
+  </footer>
+</div>
+<script>
+const TZ = "Asia/Ho_Chi_Minh";
+const LABEL = {ok: "Bình thường", warn: "Gần ngưỡng", alarm: "VƯỢT NGƯỠNG", offline: "Mất tín hiệu"};
+const XN_STATUS = {running: ["Đang chạy", "run"], standby: ["Chờ mẫu", ""], error: ["Lỗi", "err"], maintenance: ["Bảo trì", ""]};
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+
+function spark(vals, state) {
+  if (!vals || vals.length < 2) return "";
+  const lo = Math.min(...vals), hi = Math.max(...vals), span = (hi - lo) || 1;
+  const pts = vals.map((v, i) => `${(2 + i * 100 / (vals.length - 1)).toFixed(1)},${(27 - (v - lo) / span * 24).toFixed(1)}`).join(" ");
+  const color = {ok: "#5b8def", warn: "#f2a33a", alarm: "#ff5a5a", offline: "#4a5568"}[state];
+  return `<svg width="104" height="30" viewBox="0 0 104 30" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
+}
+const head = p => `<div class="row"><span class="code">${esc(p.code)}</span><span class="badge">${LABEL[p.state]}</span></div><div class="name">${esc(p.name)}</div>`;
+
+function fridge(p) {
+  return `<div class="tile ${p.state}">${head(p)}
+    <div class="row" style="align-items:flex-end"><div><span class="val">${esc(p.display)}</span> <span class="unit">°C</span></div>${spark(p.spark, p.state)}</div>
+    <div class="note">Ngưỡng ${esc(p.range)}${p.last_seen ? " · " + p.last_seen : ""}</div></div>`;
+}
+function ro(p) {
+  const err = p.extra && p.extra.read_error ? ` · đọc lỗi: ${esc(p.extra.read_error)}` : "";
+  return `<div class="tile ${p.state}">${head(p)}
+    <div style="white-space:nowrap"><span class="val" style="font-size:38px">${esc(p.display)}</span> <span class="unit">µS/cm</span></div>
+    <div class="note">${esc(p.range)} · ${esc(p.source_label.split(" ")[0])}${p.last_seen ? " · " + p.last_seen : ""}${err}</div></div>`;
+}
+function room(p) {
+  return `<div class="tile ${p.state}">${head(p)}
+    <div class="row" style="align-items:baseline"><span class="val" style="font-size:34px">${esc(p.display)}<span class="unit"> °C</span></span>
+    <span class="val" style="font-size:28px">${esc(p.display2)}<span class="unit"> %</span></span></div>
+    <div class="note">${esc(p.message || p.range)}</div></div>`;
+}
+function xn(p) {
+  const e = p.extra || {}, s = XN_STATUS[e.status] || [p.state === "offline" ? "Không có dữ liệu" : (e.status || "—"), ""];
+  return `<div class="tile ${p.state === "offline" ? "offline" : ""}"><div class="row"><span class="code" style="font-size:21px">${esc(p.name)}</span><span class="note">${esc(p.code)}</span></div>
+    <span class="st ${s[1]}">${esc(s[0])}</span>
+    <div class="kv"><div><span>Kết quả cuối</span><b>${esc(e.last_result ?? "—")}</b></div><div><span>Mẫu hôm nay</span><b>${esc(e.samples_today ?? "—")}</b></div>
+    <div><span>TAT trung vị</span><b>${e.tat_median_min != null ? esc(e.tat_median_min) + " phút" : "—"}</b></div><div><span>IQC hôm nay</span><b>${esc(e.iqc ?? "—")}</b></div></div></div>`;
+}
+
+async function refresh() {
+  try {
+    const r = await fetch("/api/status", {cache: "no-store"});
+    const d = await r.json();
+    const by = g => d.points.filter(p => g.includes(p.group));
+    document.getElementById("fridges").innerHTML = by(["fridge", "freezer"]).map(fridge).join("");
+    document.getElementById("ro").innerHTML = by(["ro"]).map(ro).join("");
+    document.getElementById("rooms").innerHTML = by(["room"]).map(room).join("");
+    document.getElementById("xn").innerHTML = by(["analyzer"]).map(xn).join("");
+    const c = d.counts;
+    document.getElementById("chips").innerHTML =
+      `<span class="chip">${d.total} điểm giám sát</span><span class="chip ok">${c.ok} bình thường</span>` +
+      (c.warn ? `<span class="chip warn">${c.warn} gần ngưỡng</span>` : "") +
+      (c.alarm ? `<span class="chip alarm">${c.alarm} vượt ngưỡng</span>` : "") +
+      (c.offline ? `<span class="chip offline">${c.offline} mất tín hiệu</span>` : "");
+    const b = document.getElementById("banner");
+    const alarms = d.active_alarms.filter(a => a.state === "alarm"), offs = d.active_alarms.filter(a => a.state === "offline");
+    b.innerHTML = alarms.length ? `<b>VƯỢT NGƯỠNG</b> ${alarms.map(a => esc(a.code + " · " + a.name + ": " + a.message)).join(" | ")}`
+      + (offs.length ? `<span style="margin-left:auto;font-size:17px;color:#d5dde8">${offs.map(a => esc(a.code)).join(", ")} mất tín hiệu</span>` : "") : "";
+    b.classList.toggle("on", alarms.length > 0);
+    document.getElementById("updated").textContent = "Cập nhật " + new Date(d.now).toLocaleTimeString("vi-VN", {timeZone: TZ});
+  } catch (e) {
+    document.getElementById("updated").textContent = "Mất kết nối máy chủ – đang thử lại…";
+  }
+}
+function tick() {
+  const n = new Date();
+  document.getElementById("clock").textContent = n.toLocaleTimeString("vi-VN", {timeZone: TZ, hour: "2-digit", minute: "2-digit"});
+  document.getElementById("date").textContent = n.toLocaleDateString("vi-VN", {timeZone: TZ, weekday: "long", day: "2-digit", month: "2-digit", year: "numeric"});
+}
+refresh(); tick(); setInterval(refresh, 10000); setInterval(tick, 1000);
+</script>
+</body>
+</html>
