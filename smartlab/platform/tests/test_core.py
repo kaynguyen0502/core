@@ -75,7 +75,7 @@ def test_short_door_opening_does_not_alarm(session):
 
 def test_offline_and_back(session):
     _send(session, "zigbee2mqtt/hs/sh63_mat", '{"temperature": 5.0}', T0)
-    ev = service.check_all(session, now=T0 + timedelta(minutes=61))
+    ev = service.check_all(session, now=T0 + timedelta(minutes=91))
     assert any(e.kind == "offline" and "SH63-M" in e.message for e in ev)
     ev = _send(session, "zigbee2mqtt/hs/sh63_mat", '{"temperature": 5.0}', T0 + timedelta(minutes=70))
     assert [e.kind for e in ev] == ["online"]
@@ -143,7 +143,7 @@ def test_restart_grace(session):
     start = T0 + timedelta(hours=2)  # máy chủ mất điện 2 giờ rồi khởi động lại
     ev = service.check_all(session, now=start + timedelta(minutes=5), seen_floor=start)
     assert not [e for e in ev if "SH20-M" in e.message]
-    ev = service.check_all(session, now=start + timedelta(minutes=61), seen_floor=start)
+    ev = service.check_all(session, now=start + timedelta(minutes=91), seen_floor=start)
     assert [e.kind for e in ev if "SH20-M" in e.message] == ["offline"]
 
 

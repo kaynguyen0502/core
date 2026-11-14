@@ -9,7 +9,9 @@ from sqlalchemy import select
 from .db import SessionLocal, init_db
 from .models import Point
 
-COOL = dict(group="fridge", temp_min=2, temp_max=8, alarm_delay_min=15, offline_after_min=60)
+# Cảm biến Sonoff gửi khi số thay đổi, chậm nhất 60 phút/lần -> 90 phút mới coi là mất tín hiệu
+ZB_OFFLINE = 90
+COOL = dict(group="fridge", temp_min=2, temp_max=8, alarm_delay_min=15, offline_after_min=ZB_OFFLINE)
 RO = dict(group="ro", ec_max=10, alarm_delay_min=6, offline_after_min=15)
 XN = dict(group="analyzer", source="lis", alarm_delay_min=0, offline_after_min=30)
 
@@ -22,13 +24,13 @@ def _cool(sh, name, location):
 def _frz(sh, name, location, lo, hi):
     return dict(code=f"SH{sh}-D", name=f"{name} – ngăn đông", location=location, group="freezer",
                 topic=f"zigbee2mqtt/hs/sh{sh}_dong", temp_min=lo, temp_max=hi,
-                alarm_delay_min=15, offline_after_min=60)
+                alarm_delay_min=15, offline_after_min=ZB_OFFLINE)
 
 
 def _room(i, name, t_hi, h_lo):
     return dict(code=f"MT{i:02d}", name=name, location=name.rsplit(" ", 1)[0] if name[-1].isdigit() else name,
                 group="room", topic=f"zigbee2mqtt/hs/mt{i:02d}", temp_min=15, temp_max=t_hi,
-                hum_min=h_lo, hum_max=70, alarm_delay_min=30, offline_after_min=60)
+                hum_min=h_lo, hum_max=70, alarm_delay_min=30, offline_after_min=ZB_OFFLINE)
 
 
 POINTS = [
