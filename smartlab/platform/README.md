@@ -7,7 +7,7 @@ Python (FastAPI) + MySQL + MQTT (Mosquitto) + Zigbee2MQTT, chạy bằng Docker 
 |---|---|
 | Nhận dữ liệu | Zigbee2MQTT (`zigbee2mqtt/hs/tl01`), camera AI-on-the-edge (`smartlab/hs/ro01/main/value`), API/LIS (`smartlab/hs/xn01`) |
 | Danh mục điểm đo | `/catalog` (có mật khẩu): sửa tên hiển thị, topic, ngưỡng, độ trễ báo; mọi thay đổi ghi nhật ký |
-| Dashboard TV | `/tv`: 12 tủ, 3 máy RO, 2 máy XN, 6 khu vực; tự làm mới 10 giây; giờ Việt Nam |
+| Dashboard TV | `/tv`: 8 tủ (12 ngăn), 3 máy RO, 2 máy XN, 6 vị trí phòng; tự làm mới 10 giây; giờ Việt Nam |
 | Cảnh báo | Vượt ngưỡng liên tục quá thời gian trễ → Zalo; nhắc lại 30 phút; báo trở lại bình thường; mất tín hiệu |
 | Chống báo nhầm | Mở cửa tủ ngắn không báo; điểm chưa ghép nối không báo; khởi động lại máy chủ không báo mất tín hiệu hàng loạt |
 | API | `/api/status`, `/api/events` |
@@ -22,7 +22,7 @@ pip install -r requirements.txt
 python -m smartlab.seed                       # tạo 23 điểm đo (SQLite smartlab.db)
 SMARTLAB_ADMIN_PASSWORD=123 uvicorn smartlab.web:app --port 8000 &
 python -m smartlab.worker &
-python tools/simulator.py --scenario alarm    # TL07 nóng dần, TL10 im lặng
+python tools/simulator.py --scenario alarm    # SH25 nóng dần, SH63 im lặng
 # Mở http://localhost:8000/tv  và  http://localhost:8000/catalog (admin / 123)
 ```
 Kiểm thử: `pytest -q tests`
@@ -35,7 +35,7 @@ Kiểm thử: `pytest -q tests`
    `docker run --rm -v $PWD/mosquitto:/m eclipse-mosquitto:2 mosquitto_passwd -c -b /m/passwd smartlab <mật khẩu>`
    (các tài khoản sau bỏ `-c`).
 5. `docker compose up -d` rồi `docker compose exec web python -m smartlab.seed`.
-6. Ghép nối cảm biến tại `http://<IP>:8080`, đặt friendly_name theo quy tắc `hs/tl01`, `hs/mt01`…
+6. Ghép nối cảm biến tại `http://<IP>:8080`, đặt friendly_name theo mã tủ của khoa: `hs/sh19_mat`, `hs/sh19_dong`, `hs/mt01`…
 7. Mở `http://<IP>:8000/catalog` sửa tên tủ, khu vực, ngưỡng theo khảo sát. TV mở `http://<IP>:8000/tv` ở chế độ toàn màn hình.
 
 ## Dùng chung MySQL với Reagent Manager
