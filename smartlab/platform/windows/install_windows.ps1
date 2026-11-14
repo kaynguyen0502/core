@@ -1,0 +1,314 @@
+﻿# SmartLab – cài đặt trên Windows (không dùng Docker)
+#
+# Cách chạy: mở PowerShell bằng quyền Administrator, vào thư mục chứa file này rồi chạy
+#   Set-ExecutionPolicy -Scope Process Bypass -Force
+#   .\install_windows.ps1                      # tự tìm cổng COM của USB Zigbee
+#   .\install_windows.ps1 -ZigbeePort COM4     # hoặc chỉ định cổng
+#
+# Chạy lại nhiều lần được: mật khẩu đã tạo được giữ nguyên, dịch vụ được cài lại.
+# Cài: Python, Node.js, Git, Mosquitto, NSSM (qua winget nếu thiếu), Zigbee2MQTT, phần mềm SmartLab.
+# Dùng MySQL đã có trên máy (MySQL của Reagent Manager), tạo schema riêng "smartlab".
+
+param(
+    [string]$InstallDir = "C:\SmartLab",
+    [string]$ZigbeePort = "",
+    [string]$MySqlBin = "",
+    [string]$MySqlRootUser = "root"
+)
+
+# "Continue": lệnh ngoài (nssm, py...) ghi ra stderr không làm dừng script; lỗi kiểm tra bằng mã thoát
+$ErrorActionPreference = "Continue"
+$env:COREPACK_ENABLE_DOWNLOAD_PROMPT = "0"
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+function Step($msg) { Write-Host "`n==> $msg" -ForegroundColor Cyan }
+function Info($msg) { Write-Host "    $msg" }
+function Fail($msg) { Write-Host "`nLỖI: $msg" -ForegroundColor Red; exit 1 }
+function Refresh-Path {
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
+                [Environment]::GetEnvironmentVariable("Path", "User")
+}
+function Write-Utf8NoBom($path, $text) {
+    [IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding $false))
+}
+function New-Password {
+    -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
+}
+function Run($exe, [string[]]$argv) {
+    & $exe @argv
+    if ($LASTEXITCODE -ne 0) { Fail "Lệnh thất bại: $exe $($argv -join ' ')" }
+}
+
+# ---------------------------------------------------------------- 0. Kiểm tra
+Step "Kiểm tra quyền Administrator"
+$principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Fail "Hãy mở PowerShell bằng 'Run as administrator' rồi chạy lại."
+}
+$Src = Split-Path $PSScriptRoot -Parent          # thư mục smartlab/platform trong repo
+if (-not (Test-Path "$Src\smartlab\web.py")) { Fail "Không thấy mã nguồn SmartLab cạnh file cài đặt ($Src)." }
+
+$App   = "$InstallDir\app"
+$Logs  = "$InstallDir\logs"
+$Mq    = "$InstallDir\mosquitto"
+$Z2m   = "$InstallDir\zigbee2mqtt"
+New-Item -ItemType Directory -Force -Path $InstallDir, $App, $Logs, $Mq, "$Mq\data" -ErrorAction Stop | Out-Null
+
+# ---------------------------------------------------------------- 1. Công cụ
+Step "Kiểm tra / cài công cụ (Python, Node.js, Git, NSSM, Mosquitto)"
+function Ensure-Tool($cmd, $wingetId, $label) {
+    if (Get-Command $cmd -ErrorAction SilentlyContinue) { Info "${label}: đã có"; return }
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Fail "Thiếu $label và máy không có winget. Cài $label thủ công rồi chạy lại." }
+    Info "Đang cài $label ..."
+    winget install --id $wingetId -e --silent --accept-source-agreements --accept-package-agreements | Out-Null
+    Refresh-Path
+    if (-not (Get-Command $cmd -ErrorAction SilentlyContinue)) { Fail "Cài $label xong nhưng chưa nhận lệnh '$cmd'. Đóng PowerShell, mở lại (Administrator) rồi chạy lại file này." }
+}
+Ensure-Tool "git"  "Git.Git"           "Git"
+Ensure-Tool "node" "OpenJS.NodeJS.LTS" "Node.js"
+Ensure-Tool "nssm" "NSSM.NSSM"         "NSSM"
+
+# Python: dùng trình khởi chạy py nếu có (tránh bản giả của Microsoft Store)
+$PyExe = $null
+$probeCode = "import sys;print(sys.executable)"
+if (Get-Command py -ErrorAction SilentlyContinue) {
+    $out = & py -3 -c $probeCode 2>$null
+    if ($LASTEXITCODE -eq 0 -and $out) { $PyExe = "$out".Trim() }
+}
+if (-not $PyExe -and (Get-Command python -ErrorAction SilentlyContinue)) {
+    $out = & python -c $probeCode 2>$null   # bản giả Microsoft Store không in ra gì
+    if ($LASTEXITCODE -eq 0 -and $out) { $PyExe = "$out".Trim() }
+}
+if (-not $PyExe) {
+    Ensure-Tool "py" "Python.Python.3.12" "Python 3.12"
+    $PyExe = "$(& py -3 -c $probeCode)".Trim()
+}
+Info "Python: $PyExe"
+
+$nodeMajor = [int]((& node -v).TrimStart("v").Split(".")[0])
+if ($nodeMajor -lt 22) { Fail "Zigbee2MQTT cần Node.js 22 trở lên (máy đang có $(& node -v)). Cập nhật: winget upgrade OpenJS.NodeJS.LTS" }
+
+$MosqDir = "$env:ProgramFiles\mosquitto"
+if (-not (Test-Path "$MosqDir\mosquitto.exe")) {
+    Info "Đang cài Mosquitto ..."
+    winget install --id EclipseFoundation.Mosquitto -e --silent --accept-source-agreements --accept-package-agreements | Out-Null
+}
+if (-not (Test-Path "$MosqDir\mosquitto.exe")) { Fail "Chưa có Mosquitto tại $MosqDir. Tải bản cài Windows tại mosquitto.org rồi chạy lại." }
+
+# MySQL
+if (-not $MySqlBin) {
+    $found = Get-ChildItem "$env:ProgramFiles\MySQL\MySQL Server *\bin\mysql.exe" -ErrorAction SilentlyContinue |
+             Sort-Object FullName | Select-Object -Last 1
+    if ($found) { $MySqlBin = $found.FullName }
+}
+if (-not $MySqlBin -or -not (Test-Path $MySqlBin)) { Fail "Không tìm thấy mysql.exe. Chạy lại với -MySqlBin 'đường dẫn\mysql.exe'." }
+$MySqlService = (Get-Service | Where-Object { $_.Name -like "MySQL*" } | Select-Object -First 1).Name
+Info "MySQL: $MySqlBin (dịch vụ: $MySqlService)"
+
+# ---------------------------------------------------------------- 2. Mật khẩu (.env)
+Step "Tạo / đọc cấu hình .env"
+$EnvFile = "$App\.env"
+$cfg = [ordered]@{}
+if (Test-Path $EnvFile) {
+    foreach ($line in Get-Content $EnvFile -Encoding UTF8) {
+        if ($line -match '^\s*([^#=]+?)\s*=\s*(.*)$') { $cfg[$Matches[1]] = $Matches[2] }
+    }
+    Info "Dùng lại mật khẩu trong $EnvFile"
+}
+function Keep($key, $default) { if ($cfg.Contains($key) -and $cfg[$key]) { return $cfg[$key] } return $default }
+
+$dbPw    = Keep "SMARTLAB_DB_PASSWORD"   (New-Password)
+$mqttPw  = Keep "SMARTLAB_MQTT_PASSWORD" (New-Password)
+$z2mPw   = Keep "Z2M_MQTT_PASSWORD"      (New-Password)
+$ro1Pw   = Keep "RO01_MQTT_PASSWORD"     (New-Password)
+$ro2Pw   = Keep "RO02_MQTT_PASSWORD"     (New-Password)
+$adminPw = Keep "SMARTLAB_ADMIN_PASSWORD" (New-Password)
+
+$envText = @"
+# SmartLab – cấu hình máy chủ (tạo bởi install_windows.ps1). Giữ bí mật file này.
+SMARTLAB_DB_PASSWORD=$dbPw
+SMARTLAB_DB_URL=mysql+pymysql://smartlab:$dbPw@localhost:3306/smartlab?charset=utf8mb4
+SMARTLAB_MQTT_HOST=localhost
+SMARTLAB_MQTT_PORT=1883
+SMARTLAB_MQTT_USER=smartlab
+SMARTLAB_MQTT_PASSWORD=$mqttPw
+Z2M_MQTT_PASSWORD=$z2mPw
+RO01_MQTT_PASSWORD=$ro1Pw
+RO02_MQTT_PASSWORD=$ro2Pw
+SMARTLAB_SITE_NAME=$(Keep "SMARTLAB_SITE_NAME" "Khoa Hóa Sinh · BVĐK Đà Nẵng")
+SMARTLAB_ADMIN_USER=$(Keep "SMARTLAB_ADMIN_USER" "admin")
+SMARTLAB_ADMIN_PASSWORD=$adminPw
+SMARTLAB_ZALO_SEND_URL=$(Keep "SMARTLAB_ZALO_SEND_URL" "")
+SMARTLAB_ZALO_CHAT_IDS=$(Keep "SMARTLAB_ZALO_CHAT_IDS" "")
+SMARTLAB_WATCHDOG_URL=$(Keep "SMARTLAB_WATCHDOG_URL" "")
+"@
+
+# ---------------------------------------------------------------- 3. Mã nguồn + Python
+Step "Chép phần mềm SmartLab vào $App"
+foreach ($item in @("smartlab", "tools", "requirements.txt")) {
+    Copy-Item -Recurse -Force "$Src\$item" $App -ErrorAction Stop
+}
+Write-Utf8NoBom $EnvFile $envText
+# *S-1-5-32-544 = nhóm Administrators, *S-1-5-18 = SYSTEM (đúng cả trên Windows tiếng Việt)
+icacls $EnvFile /inheritance:r /grant:r "*S-1-5-32-544:F" "*S-1-5-18:F" | Out-Null
+
+Step "Tạo môi trường Python và cài thư viện"
+if (-not (Test-Path "$InstallDir\venv\Scripts\python.exe")) { Run $PyExe @("-m", "venv", "$InstallDir\venv") }
+$VPy = "$InstallDir\venv\Scripts\python.exe"
+Run $VPy @("-m", "pip", "install", "--upgrade", "pip", "-q")
+Run $VPy @("-m", "pip", "install", "-r", "$App\requirements.txt", "-q")
+
+# ---------------------------------------------------------------- 4. MySQL
+Step "Tạo schema MySQL 'smartlab' và tài khoản riêng"
+$rootSecure = Read-Host "    Nhập mật khẩu tài khoản '$MySqlRootUser' của MySQL" -AsSecureString
+$env:MYSQL_PWD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
+    [Runtime.InteropServices.Marshal]::SecureStringToBSTR($rootSecure))
+$sql = "CREATE DATABASE IF NOT EXISTS smartlab CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; " +
+       "CREATE USER IF NOT EXISTS 'smartlab'@'localhost' IDENTIFIED BY '$dbPw'; " +
+       "ALTER USER 'smartlab'@'localhost' IDENTIFIED BY '$dbPw'; " +
+       "GRANT ALL PRIVILEGES ON smartlab.* TO 'smartlab'@'localhost'; FLUSH PRIVILEGES;"
+& $MySqlBin -u $MySqlRootUser -e $sql
+$code = $LASTEXITCODE
+Remove-Item Env:\MYSQL_PWD
+if ($code -ne 0) { Fail "Không tạo được schema MySQL (sai mật khẩu root?)." }
+Info "Đã tạo schema smartlab (không đụng dữ liệu Reagent Manager)."
+
+Push-Location $App
+Run $VPy @("-m", "smartlab.seed")
+Pop-Location
+
+# ---------------------------------------------------------------- 5. Mosquitto
+Step "Cấu hình Mosquitto (MQTT, cổng 1883, có mật khẩu)"
+$defaultSvc = Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue
+if ($defaultSvc) {
+    Stop-Service mosquitto -Force -ErrorAction SilentlyContinue
+    Set-Service mosquitto -StartupType Disabled
+    Info "Đã tắt dịch vụ mosquitto mặc định (thay bằng SmartLab-MQTT)."
+}
+$mqConf = @"
+listener 1883
+allow_anonymous false
+password_file $($Mq -replace '\\','/')/passwd
+persistence true
+persistence_location $($Mq -replace '\\','/')/data/
+log_dest file $($Logs -replace '\\','/')/mosquitto.log
+"@
+Set-Content -Path "$Mq\mosquitto.conf" -Value $mqConf -Encoding ASCII
+$passwd = "$Mq\passwd"
+if (Test-Path $passwd) { Remove-Item $passwd }
+Run "$MosqDir\mosquitto_passwd.exe" @("-c", "-b", $passwd, "smartlab", $mqttPw)
+Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "zigbee2mqtt", $z2mPw)
+Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "ro01", $ro1Pw)
+Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "ro02", $ro2Pw)
+
+# ---------------------------------------------------------------- 6. Zigbee2MQTT
+Step "Cài Zigbee2MQTT"
+if (-not (Test-Path "$Z2m\package.json")) {
+    Run "git" @("clone", "--depth", "1", "https://github.com/Koenkk/zigbee2mqtt.git", $Z2m)
+}
+Push-Location $Z2m
+Run "corepack" @("enable")
+Run "pnpm" @("install", "--frozen-lockfile")
+Run "pnpm" @("run", "build")
+Pop-Location
+
+if (-not $ZigbeePort) {
+    $dev = Get-CimInstance Win32_PnPEntity | Where-Object {
+        $_.Name -match '\((COM\d+)\)' -and $_.Name -match 'CP210|Silicon Labs|USB Serial|Sonoff|CH340'
+    } | Select-Object -First 1
+    if ($dev -and $dev.Name -match '\((COM\d+)\)') { $ZigbeePort = $Matches[1] }
+}
+if (-not $ZigbeePort) {
+    Info "Không tự tìm thấy USB Zigbee. Mở Device Manager > Ports (COM & LPT) để xem cổng."
+    $ZigbeePort = Read-Host "    Nhập cổng COM của ZBDongle-P (vd COM4)"
+}
+Info "USB Zigbee: $ZigbeePort"
+
+New-Item -ItemType Directory -Force -Path "$Z2m\data" | Out-Null
+$z2mConf = "$Z2m\data\configuration.yaml"
+if (-not (Test-Path $z2mConf)) {
+    $yaml = @"
+# Zigbee2MQTT - SmartLab. Device names: hs/sh19_mat, hs/sh19_dong, hs/mt01 ...
+homeassistant:
+  enabled: false
+frontend:
+  enabled: true
+  port: 8080
+mqtt:
+  base_topic: zigbee2mqtt
+  server: mqtt://localhost:1883
+  user: zigbee2mqtt
+  password: $z2mPw
+serial:
+  port: $ZigbeePort
+  adapter: zstack
+advanced:
+  channel: 25
+  network_key: GENERATE
+  pan_id: GENERATE
+  ext_pan_id: GENERATE
+  last_seen: ISO_8601
+"@
+    Write-Utf8NoBom $z2mConf $yaml
+} else {
+    Info "Giữ nguyên $z2mConf (đã có, có thể đã ghép cảm biến)."
+}
+
+# ---------------------------------------------------------------- 7. Dịch vụ Windows
+Step "Đăng ký dịch vụ Windows (tự chạy khi bật máy, tự khởi động lại khi lỗi)"
+function Install-SmartLabService($name, $exe, $params, $dir, [string[]]$deps) {
+    & nssm status $name *> $null
+    if ($LASTEXITCODE -eq 0) {
+        & nssm stop $name *> $null
+        & nssm remove $name confirm *> $null
+    }
+    Run "nssm" @("install", $name, $exe)
+    Run "nssm" @("set", $name, "AppParameters", $params)
+    Run "nssm" @("set", $name, "AppDirectory", $dir)
+    Run "nssm" @("set", $name, "Start", "SERVICE_AUTO_START")
+    Run "nssm" @("set", $name, "AppStdout", "$Logs\$name.log")
+    Run "nssm" @("set", $name, "AppStderr", "$Logs\$name.log")
+    Run "nssm" @("set", $name, "AppRotateFiles", "1")
+    Run "nssm" @("set", $name, "AppRotateBytes", "5000000")
+    Run "nssm" @("set", $name, "AppExit", "Default", "Restart")
+    Run "nssm" @("set", $name, "AppRestartDelay", "10000")
+    $deps = @($deps | Where-Object { $_ })
+    if ($deps.Count -gt 0) { Run "nssm" (@("set", $name, "DependOnService") + $deps) }
+    Run "nssm" @("start", $name)
+    Info "${name}: đã chạy"
+}
+$NodeExe = (Get-Command node).Source
+Install-SmartLabService "SmartLab-MQTT" "$MosqDir\mosquitto.exe" "-c `"$Mq\mosquitto.conf`"" $Mq @()
+Install-SmartLabService "SmartLab-Zigbee2MQTT" $NodeExe "index.js" $Z2m @("SmartLab-MQTT")
+Install-SmartLabService "SmartLab-Worker" $VPy "-m smartlab.worker" $App @("SmartLab-MQTT", $MySqlService)
+Install-SmartLabService "SmartLab-Web" $VPy "-m uvicorn smartlab.web:app --host 0.0.0.0 --port 8000" $App @($MySqlService)
+
+# ---------------------------------------------------------------- 8. Tường lửa, nguồn điện
+Step "Mở tường lửa cho mạng nội bộ (8000 dashboard, 8080 Zigbee2MQTT, 1883 MQTT)"
+foreach ($port in 8000, 8080, 1883) {
+    $rule = "SmartLab TCP $port"
+    Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
+    New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort $port `
+        -Action Allow -RemoteAddress LocalSubnet -Profile Any | Out-Null
+}
+
+Step "Tắt Sleep / Hibernate để máy chạy 24/7"
+powercfg /change standby-timeout-ac 0
+powercfg /change hibernate-timeout-ac 0
+powercfg /hibernate off
+
+# ---------------------------------------------------------------- Xong
+$ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike "127.*" -and $_.PrefixOrigin -ne "WellKnown" } |
+       Select-Object -First 1).IPAddress
+Write-Host "`n================ CÀI ĐẶT XONG ================" -ForegroundColor Green
+Write-Host "Dashboard TV       : http://${ip}:8000/tv"
+Write-Host "Danh mục điểm đo   : http://${ip}:8000/catalog   (admin / $adminPw)"
+Write-Host "Ghép cảm biến      : http://${ip}:8080"
+Write-Host "MQTT cho camera RO : máy chủ $ip, cổng 1883; ro01 / $ro1Pw ; ro02 / $ro2Pw"
+Write-Host "Mật khẩu lưu tại   : $EnvFile (chỉ Administrators đọc được)"
+Write-Host "Nhật ký            : $Logs"
+Write-Host "`nViệc còn lại làm tay:" -ForegroundColor Yellow
+Write-Host " 1. BIOS: 'Restore on AC Power Loss' = Power On"
+Write-Host " 2. Windows Update: đặt Active hours / tạm dừng, cập nhật thủ công ngoài giờ"
+Write-Host " 3. Đặt IP tĩnh cho card mạng theo IP Phòng CNTT cấp"
+Write-Host " 4. Điền Zalo vào $EnvFile rồi chạy: nssm restart SmartLab-Worker"

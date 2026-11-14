@@ -27,7 +27,22 @@ python tools/simulator.py --scenario alarm    # SH25 nóng dần, SH63 im lặng
 ```
 Kiểm thử: `pytest -q tests`
 
-## Triển khai tại khoa
+## Triển khai trên Windows (khuyên dùng cho khoa)
+Không cần Docker. Dùng MySQL sẵn có (của Reagent Manager), tạo schema riêng `smartlab`.
+1. Cắm USB ZBDongle-P. Nếu Device Manager chưa hiện cổng COM, cài driver Silicon Labs CP210x.
+2. Mở PowerShell bằng **Run as administrator**, vào thư mục `smartlab\platform\windows`:
+   ```powershell
+   Set-ExecutionPolicy -Scope Process Bypass -Force
+   .\install_windows.ps1            # hoặc .\install_windows.ps1 -ZigbeePort COM4
+   ```
+3. Script tự cài Python, Node.js, Git, NSSM, Mosquitto (qua winget nếu thiếu), Zigbee2MQTT, thư viện Python;
+   tạo schema MySQL (hỏi mật khẩu root), sinh mật khẩu, đăng ký 4 dịch vụ Windows
+   (SmartLab-MQTT, SmartLab-Zigbee2MQTT, SmartLab-Worker, SmartLab-Web), mở tường lửa 8000/8080/1883
+   trong mạng nội bộ, tắt Sleep. Cuối cùng in ra địa chỉ dashboard và mật khẩu.
+4. Làm tay: BIOS "Restore on AC Power Loss = Power On"; kiểm soát Windows Update; đặt IP tĩnh.
+5. Nhật ký: `C:\SmartLab\logs`. Khởi động lại một dịch vụ: `nssm restart SmartLab-Worker`.
+
+## Triển khai bằng Docker (Ubuntu Server)
 1. Máy chủ Ubuntu Server LTS, cài Docker. Cắm USB ZBDongle-P, lấy đường dẫn: `ls /dev/serial/by-id/`, sửa dòng `devices:` trong `docker-compose.yml`.
 2. `cp .env.example .env` rồi đặt mật khẩu MySQL, MQTT, quản trị; điền Zalo khi có token.
 3. `cp zigbee2mqtt/configuration.example.yaml zigbee2mqtt/configuration.yaml`, điền mật khẩu MQTT.

@@ -2,6 +2,26 @@
 import os
 
 
+def _load_env_file():
+    """Đọc file .env (chạy trực tiếp trên Windows, không qua Docker).
+
+    Biến đã có sẵn trong môi trường (Docker env_file) được giữ nguyên.
+    """
+    path = os.environ.get("SMARTLAB_ENV_FILE") or os.path.join(os.getcwd(), ".env")
+    if not os.path.isfile(path):
+        return
+    with open(path, encoding="utf-8-sig") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"'))
+
+
+_load_env_file()
+
+
 def _env(name, default=""):
     return os.environ.get(name, default)
 
