@@ -241,13 +241,13 @@ if ($busy) {
     }
     Start-Sleep -Seconds 2
 }
-# Không bật persistence: Mosquitto 2.0.20 trên Windows bị sập (0xC0000409) khi bật.
+# Cấu hình đã chạy được trên Windows (Mosquitto 2.0.20). Không bật persistence: bị sập (0xC0000409).
+# Nhật ký mặc định ra stderr, NSSM ghi vào logs\SmartLab-MQTT.log.
 # SmartLab không cần: số đo được lưu vào CSDL ngay khi nhận, cảm biến tự gửi lại theo chu kỳ.
 $mqConf = @"
 listener $MqttPort
 allow_anonymous false
 password_file $($Mq -replace '\\','/')/passwd
-log_dest stdout
 "@
 Set-Content -Path "$Mq\mosquitto.conf" -Value $mqConf -Encoding ASCII
 $passwd = "$Mq\passwd"
