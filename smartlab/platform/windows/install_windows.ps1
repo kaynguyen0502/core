@@ -233,8 +233,10 @@ Run "pnpm" @("run", "build")
 Pop-Location
 
 # Cổng COM của USB Zigbee. Bỏ qua cổng Bluetooth ("Standard Serial over Bluetooth link").
-#   ZBDongle-P: chip CP2102N -> "Silicon Labs CP210x ... (COMx)"      -> adapter zstack
-#   ZBDongle-E ("V2"): chip CH9102F -> "USB-Enhanced-SERIAL CH9102 (COMx)" -> adapter ember
+# Chip USB có thể là CP2102N (Silicon Labs) hoặc CH9102F (WCH) ở CẢ bản P lẫn bản E,
+# nên loại adapter xác định theo tên gốc USB báo về:
+#   "Sonoff Zigbee 3.0 USB Dongle Plus V2" -> ZBDongle-E -> adapter ember
+#   "Sonoff Zigbee 3.0 USB Dongle Plus"    -> ZBDongle-P -> adapter zstack
 $dev = $null
 $ports = Get-CimInstance Win32_PnPEntity | Where-Object {
     $_.Name -match '\((COM\d+)\)' -and $_.Name -notmatch 'Bluetooth'
@@ -250,8 +252,9 @@ if (-not $ZigbeePort) {
     $usbZb = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'Sonoff|Zigbee' -and $_.Name -notmatch '\(COM' }
     if ($usbZb) {
         Info "Thấy '$($usbZb[0].Name)' nhưng CHƯA có driver (nằm trong Other devices)."
-        Info "  - Tên có 'V2' (ZBDongle-E): cài driver WCH CH343SER (wch-ic.com)."
-        Info "  - ZBDongle-P: cài driver Silicon Labs CP210x VCP (silabs.com)."
+        Info "  Xem Properties > Details > Hardware Ids:"
+        Info "  - VID_10C4&PID_EA60: cài driver Silicon Labs CP210x VCP (silabs.com)"
+        Info "  - VID_1A86&PID_55D4: cài driver WCH CH343SER (wch-ic.com)"
         Fail "Cài driver, rút cắm lại USB, thấy cổng COM trong Device Manager rồi chạy lại."
     }
 }
@@ -260,8 +263,18 @@ if (-not $ZigbeePort) {
     $ZigbeePort = Read-Host "    Nhập cổng COM của ZBDongle-P (vd COM4)"
 }
 if ($ZigbeeAdapter -eq "auto") {
-    $ZigbeeAdapter = "zstack"
-    if ($dev -and $dev.Name -match 'CH910|CH343|USB-Enhanced') { $ZigbeeAdapter = "ember" }
+    $busDesc = ""
+    if ($dev) {
+        $busDesc = (Get-PnpDeviceProperty -InstanceId $dev.PNPDeviceID -KeyName "DEVPKEY_Device_BusReportedDeviceDesc" `
+                    -ErrorAction SilentlyContinue).Data
+    }
+    if ($busDesc -match 'V2') { $ZigbeeAdapter = "ember" }
+    elseif ($busDesc -match 'Dongle Plus') { $ZigbeeAdapter = "zstack" }
+    else {
+        Info "Không đọc được loại USB ($busDesc). Xem tem trên USB: ZBDongle-E hay ZBDongle-P."
+        $ans = Read-Host "    Gõ E hoặc P"
+        $ZigbeeAdapter = if ($ans -match '^[Ee]') { "ember" } else { "zstack" }
+    }
 }
 Info "USB Zigbee: $ZigbeePort (adapter: $ZigbeeAdapter$(if ($dev) { ", $($dev.Name)" }))"
 
