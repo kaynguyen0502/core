@@ -5,6 +5,7 @@
 #   .\install_windows.ps1                      # tự tìm cổng COM của USB Zigbee
 #   .\install_windows.ps1 -ZigbeePort COM4     # hoặc chỉ định cổng
 #   .\install_windows.ps1 -ZigbeeAdapter ember # ZBDongle-E ("V2"); ZBDongle-P là zstack (mặc định: tự nhận)
+#   .\install_windows.ps1 -MqttPort 1884       # máy đã có MQTT của dự án khác ở cổng 1883: chạy song song
 #
 # Chạy lại nhiều lần được: mật khẩu đã tạo được giữ nguyên, dịch vụ được cài lại.
 # Cài: Python, Node.js, Git, Mosquitto, NSSM (qua winget nếu thiếu), Zigbee2MQTT, phần mềm SmartLab.
@@ -18,7 +19,8 @@ param(
     [string]$MySqlRootUser = "root",
     [switch]$UseSQLite,
     [ValidateSet("auto", "zstack", "ember")]
-    [string]$ZigbeeAdapter = "auto"
+    [string]$ZigbeeAdapter = "auto",
+    [int]$MqttPort = 1883
 )
 
 # "Continue": lệnh ngoài (nssm, py...) ghi ra stderr không làm dừng script; lỗi kiểm tra bằng mã thoát
@@ -150,7 +152,7 @@ $envText = @"
 SMARTLAB_DB_PASSWORD=$dbPw
 SMARTLAB_DB_URL=$dbUrl
 SMARTLAB_MQTT_HOST=localhost
-SMARTLAB_MQTT_PORT=1883
+SMARTLAB_MQTT_PORT=$MqttPort
 SMARTLAB_MQTT_USER=smartlab
 SMARTLAB_MQTT_PASSWORD=$mqttPw
 Z2M_MQTT_PASSWORD=$z2mPw
@@ -202,22 +204,28 @@ Pop-Location
 
 # ---------------------------------------------------------------- 5. Mosquitto
 Step "Cấu hình Mosquitto (MQTT, cổng 1883, có mật khẩu)"
-$defaultSvc = Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue
-if ($defaultSvc) {
-    Set-Service mosquitto -StartupType Disabled
-    & sc.exe stop mosquitto *> $null
-    Info "Đã tắt dịch vụ mosquitto mặc định (thay bằng SmartLab-MQTT)."
-}
+# Chỉ dừng dịch vụ của chính SmartLab. MQTT của dự án khác (vd huyết học) KHÔNG tự tắt.
 & nssm stop SmartLab-MQTT *> $null
-Get-Process mosquitto -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Start-Sleep -Seconds 2
-$busy = Get-NetTCPConnection -LocalPort 1883 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+$busy = Get-NetTCPConnection -LocalPort $MqttPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($busy) {
     $proc = Get-Process -Id $busy.OwningProcess -ErrorAction SilentlyContinue
-    Fail "Cổng 1883 đang bị chương trình '$($proc.ProcessName)' (PID $($busy.OwningProcess), $($proc.Path)) chiếm. Tắt chương trình đó rồi chạy lại."
+    $svc = Get-CimInstance Win32_Service | Where-Object { $_.ProcessId -eq $busy.OwningProcess } | Select-Object -First 1
+    Info "Cổng $MqttPort đang được dùng bởi '$($proc.ProcessName)' (PID $($busy.OwningProcess)$(if ($svc) { ", dịch vụ $($svc.Name)" }))."
+    Info "  Có thể là MQTT của dự án khác trên máy này."
+    $ans = Read-Host "    Tắt hẳn chương trình đó để SmartLab dùng cổng $MqttPort? (Y = tắt, N = dừng cài, chạy lại với -MqttPort 1884)"
+    if ($ans -notmatch '^[Yy]') { Fail "Chưa cài tiếp. Muốn chạy song song: .\install_windows.ps1 -UseSQLite -MqttPort 1884" }
+    if ($svc) {
+        Set-Service $svc.Name -StartupType Disabled
+        & sc.exe stop $svc.Name *> $null
+        Info "Đã dừng và tắt tự khởi động dịch vụ $($svc.Name)."
+    } else {
+        Stop-Process -Id $busy.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+    Start-Sleep -Seconds 2
 }
 $mqConf = @"
-listener 1883
+listener $MqttPort
 allow_anonymous false
 password_file $($Mq -replace '\\','/')/passwd
 persistence true
@@ -307,7 +315,7 @@ frontend:
   port: 8080
 mqtt:
   base_topic: zigbee2mqtt
-  server: mqtt://localhost:1883
+  server: mqtt://localhost:$MqttPort
   user: zigbee2mqtt
   password: $z2mPw
 serial:
@@ -371,8 +379,8 @@ Install-SmartLabService "SmartLab-Worker" $VPy "-m smartlab.worker" $App @("Smar
 Install-SmartLabService "SmartLab-Web" $VPy "-m uvicorn smartlab.web:app --host 0.0.0.0 --port 8000" $App @($MySqlService)
 
 # ---------------------------------------------------------------- 8. Tường lửa, nguồn điện
-Step "Mở tường lửa cho mạng nội bộ (8000 dashboard, 8080 Zigbee2MQTT, 1883 MQTT)"
-foreach ($port in 8000, 8080, 1883) {
+Step "Mở tường lửa cho mạng nội bộ (8000 dashboard, 8080 Zigbee2MQTT, $MqttPort MQTT)"
+foreach ($port in 8000, 8080, $MqttPort) {
     $rule = "SmartLab TCP $port"
     Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
     New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort $port `
@@ -391,7 +399,7 @@ Write-Host "`n================ CÀI ĐẶT XONG ================" -ForegroundCol
 Write-Host "Dashboard TV       : http://${ip}:8000/tv"
 Write-Host "Danh mục điểm đo   : http://${ip}:8000/catalog   (admin / $adminPw)"
 Write-Host "Ghép cảm biến      : http://${ip}:8080"
-Write-Host "MQTT cho camera RO : máy chủ $ip, cổng 1883; ro01 / $ro1Pw ; ro02 / $ro2Pw"
+Write-Host "MQTT cho camera RO : máy chủ $ip, cổng $MqttPort; ro01 / $ro1Pw ; ro02 / $ro2Pw"
 Write-Host "Mật khẩu lưu tại   : $EnvFile (chỉ Administrators đọc được)"
 Write-Host "Nhật ký            : $Logs"
 Write-Host "`nViệc còn lại làm tay:" -ForegroundColor Yellow
