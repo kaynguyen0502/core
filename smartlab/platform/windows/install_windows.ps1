@@ -368,8 +368,11 @@ advanced:
     $yaml = [IO.File]::ReadAllText($z2mConf)
     $yaml = [regex]::Replace($yaml, '(?ms)(^frontend:.*?^\s+port:\s*)\d+', "`${1}$Z2mPort")
     $yaml = [regex]::Replace($yaml, 'mqtt://localhost:\d+', "mqtt://localhost:$MqttPort")
+    # Mật khẩu MQTT phải khớp file passwd vừa tạo (cấu hình có thể chép từ lần cài khác)
+    $yaml = [regex]::Replace($yaml, '(?ms)(^mqtt:.*?^\s+user:\s*)\S+', "`${1}zigbee2mqtt")
+    $yaml = [regex]::Replace($yaml, '(?ms)(^mqtt:.*?^\s+password:\s*)\S+', "`${1}$z2mPw")
     Write-Utf8NoBom $z2mConf $yaml
-    Info "Giữ nguyên $z2mConf, cập nhật cổng giao diện $Z2mPort."
+    Info "Giữ nguyên $z2mConf, cập nhật cổng giao diện $Z2mPort và tài khoản MQTT."
 }
 
 # ---------------------------------------------------------------- 7. Dịch vụ Windows
