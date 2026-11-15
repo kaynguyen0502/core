@@ -219,7 +219,10 @@ Pop-Location
 # ---------------------------------------------------------------- 5. Mosquitto
 Step "Cấu hình Mosquitto (MQTT, cổng $MqttPort, có mật khẩu)"
 # Chỉ dừng dịch vụ của chính SmartLab. MQTT của dự án khác (vd huyết học) KHÔNG tự tắt.
-& nssm stop SmartLab-MQTT *> $null
+# Dừng các dịch vụ phụ thuộc trước, MQTT sau cùng (Windows không cho dừng MQTT khi còn dịch vụ dựa vào nó).
+foreach ($svcName in @("SmartLab-Web", "SmartLab-Worker", "SmartLab-Zigbee2MQTT", "SmartLab-MQTT")) {
+    if (Get-Service $svcName -ErrorAction SilentlyContinue) { Stop-Service $svcName -Force -ErrorAction SilentlyContinue }
+}
 Start-Sleep -Seconds 2
 $busy = Get-NetTCPConnection -LocalPort $MqttPort -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($busy) {
