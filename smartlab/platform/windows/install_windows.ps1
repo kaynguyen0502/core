@@ -40,6 +40,8 @@ function New-Password {
     -join ((48..57) + (65..90) + (97..122) | Get-Random -Count 20 | ForEach-Object { [char]$_ })
 }
 function Run($exe, [string[]]$argv) {
+    if (-not (Get-Command $exe -ErrorAction SilentlyContinue)) { Fail "Không tìm thấy lệnh '$exe'." }
+    $global:LASTEXITCODE = 0
     & $exe @argv
     if ($LASTEXITCODE -ne 0) { Fail "Lệnh thất bại: $exe $($argv -join ' ')" }
 }
@@ -227,7 +229,13 @@ if (-not (Test-Path "$Z2m\package.json")) {
     Run "git" @("clone", "--depth", "1", "https://github.com/Koenkk/zigbee2mqtt.git", $Z2m)
 }
 Push-Location $Z2m
-Run "corepack" @("enable")
+# Node.js 25+ không còn kèm corepack -> cài pnpm bằng npm
+if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) {
+    if (Get-Command corepack -ErrorAction SilentlyContinue) { Run "corepack" @("enable") }
+    else { Run "npm" @("install", "-g", "pnpm") }
+    Refresh-Path
+    if (-not (Get-Command pnpm -ErrorAction SilentlyContinue)) { $env:Path += ";$env:APPDATA\npm" }
+}
 Run "pnpm" @("install", "--frozen-lockfile")
 Run "pnpm" @("run", "build")
 Pop-Location
@@ -328,7 +336,17 @@ function Install-SmartLabService($name, $exe, $params, $dir, [string[]]$deps) {
     Run "nssm" @("set", $name, "AppRestartDelay", "10000")
     $deps = @($deps | Where-Object { $_ })
     if ($deps.Count -gt 0) { Run "nssm" (@("set", $name, "DependOnService") + $deps) }
-    Run "nssm" @("start", $name)
+    & nssm start $name *> $null
+    Start-Sleep -Seconds 3
+    $st = (Get-Service $name -ErrorAction SilentlyContinue).Status
+    if ($st -ne "Running") {
+        Write-Host "    $name không chạy được (trạng thái: $st). Nhật ký gần nhất:" -ForegroundColor Yellow
+        foreach ($log in @("$Logs\$name.log", "$Logs\mosquitto.log")) {
+            if (($name -ne "SmartLab-MQTT") -and ($log -like "*mosquitto.log")) { continue }
+            if (Test-Path $log) { Write-Host "    --- $log"; Get-Content $log -Tail 15 | ForEach-Object { Write-Host "    $_" } }
+        }
+        Fail "Dịch vụ $name không khởi động được. Chụp màn hình này gửi lại để xử lý."
+    }
     Info "${name}: đã chạy"
 }
 $NodeExe = (Get-Command node).Source
