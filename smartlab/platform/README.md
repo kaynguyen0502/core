@@ -40,7 +40,7 @@ Không cần Docker. Dùng MySQL sẵn có (của Reagent Manager), tạo schema
    (SmartLab-MQTT, SmartLab-Zigbee2MQTT, SmartLab-Worker, SmartLab-Web), mở tường lửa 8000/8080/1883
    trong mạng nội bộ, tắt Sleep. Cuối cùng in ra địa chỉ dashboard và mật khẩu.
 4. Làm tay: BIOS "Restore on AC Power Loss = Power On"; kiểm soát Windows Update; đặt IP tĩnh.
-5. Máy thử nghiệm chưa có MySQL: script hỏi chuyển sang SQLite (hoặc chạy `.\install_windows.ps1 -UseSQLite`). Dữ liệu ở `C:\SmartLab\data\smartlab.db`.
+5. Máy thử nghiệm chưa có MySQL: script hỏi chuyển sang SQLite (hoặc chạy `.\install_windows.ps1 -UseSQLite`). Dữ liệu ở `<thư mục cài>\data\smartlab-platform.db`. Máy đã có chương trình khác ở `C:\SmartLab` thì cài thư mục riêng: `-InstallDir C:\SmartLabHS` (script từ chối cài đè).
 6. Nhật ký: `C:\SmartLab\logs`. Khởi động lại một dịch vụ: `nssm restart SmartLab-Worker`.
 
 ## Triển khai bằng Docker (Ubuntu Server)
