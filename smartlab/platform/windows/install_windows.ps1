@@ -59,11 +59,23 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 $Src = Split-Path $PSScriptRoot -Parent          # thư mục smartlab/platform trong repo
 if (-not (Test-Path "$Src\smartlab\web.py")) { Fail "Không thấy mã nguồn SmartLab cạnh file cài đặt ($Src)." }
 
+# Không cài đè vào thư mục đang có chương trình / dữ liệu khác (vd dự án SmartLab cũ ở C:\SmartLab)
+$Marker = "$InstallDir\.smartlab-platform"
+if ((Test-Path $InstallDir) -and -not (Test-Path $Marker)) {
+    $foreign = Get-ChildItem $InstallDir -Force -ErrorAction SilentlyContinue |
+               Where-Object { $_.Name -notin @("app", "venv", "logs", "mosquitto", "zigbee2mqtt", "data") }
+    if ($foreign -or (Test-Path "$InstallDir\data\smartlab.db")) {
+        Info "Thư mục $InstallDir đã có file của chương trình khác:"
+        $foreign | Select-Object -First 8 | ForEach-Object { Info "  - $($_.Name)" }
+        Fail "Không cài đè. Chạy lại với thư mục riêng, vd: .\install_windows.ps1 -InstallDir C:\SmartLabHS"
+    }
+}
 $App   = "$InstallDir\app"
 $Logs  = "$InstallDir\logs"
 $Mq    = "$InstallDir\mosquitto"
 $Z2m   = "$InstallDir\zigbee2mqtt"
 New-Item -ItemType Directory -Force -Path $InstallDir, $App, $Logs, $Mq, "$Mq\data" -ErrorAction Stop | Out-Null
+Set-Content -Path $Marker -Value "Thư mục cài SmartLab platform (install_windows.ps1)" -Encoding UTF8
 
 # ---------------------------------------------------------------- 1. Công cụ
 Step "Kiểm tra / cài công cụ (Python, Node.js, Git, NSSM, Mosquitto)"
@@ -122,7 +134,7 @@ if (-not $UseSQLite -and (-not $MySqlBin -or -not (Test-Path $MySqlBin))) {
 }
 if ($UseSQLite) {
     New-Item -ItemType Directory -Force -Path "$InstallDir\data" | Out-Null
-    Info "Cơ sở dữ liệu: SQLite tại $InstallDir\data\smartlab.db"
+    Info "Cơ sở dữ liệu: SQLite tại $InstallDir\data\smartlab-platform.db"
 } else {
     $MySqlService = (Get-Service | Where-Object { $_.Name -like "MySQL*" } | Select-Object -First 1).Name
     Info "MySQL: $MySqlBin (dịch vụ: $MySqlService)"
@@ -147,7 +159,7 @@ $ro1Pw   = Keep "RO01_MQTT_PASSWORD"     (New-Password)
 $ro2Pw   = Keep "RO02_MQTT_PASSWORD"     (New-Password)
 $adminPw = Keep "SMARTLAB_ADMIN_PASSWORD" (New-Password)
 
-$dbUrl = if ($UseSQLite) { "sqlite:///$($InstallDir -replace '\\','/')/data/smartlab.db" }
+$dbUrl = if ($UseSQLite) { "sqlite:///$($InstallDir -replace '\\','/')/data/smartlab-platform.db" }
          else { "mysql+pymysql://smartlab:$dbPw@localhost:3306/smartlab?charset=utf8mb4" }
 $envText = @"
 # SmartLab – cấu hình máy chủ (tạo bởi install_windows.ps1). Giữ bí mật file này.
