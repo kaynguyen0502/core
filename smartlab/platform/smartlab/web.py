@@ -9,14 +9,17 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
 from sqlalchemy import select
 
-from . import alarms, config, service
-from .db import SessionLocal, init_db
+from datetime import date, datetime, timedelta
+
+from . import alarms, config, records, service
+from . import db as dbmod
+from .db import init_db
 from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState
 
 @asynccontextmanager
@@ -32,7 +35,7 @@ TZ = ZoneInfo(config.TIMEZONE)
 
 
 def db():
-    with SessionLocal() as s:
+    with dbmod.SessionLocal() as s:   # lấy lúc chạy (kiểm thử có thể thay CSDL)
         yield s
 
 
@@ -105,6 +108,76 @@ def api_events(limit: int = 50, s=Depends(db)):
                      .order_by(AlarmEvent.ts.desc()).limit(min(limit, 500))).all()
     return [{"ts": local(e.ts).isoformat(), "code": code, "kind": e.kind, "message": e.message,
              "notified": e.notified} for e, code in rows]
+
+
+def _point(s, code):
+    p = s.scalar(select(Point).where(Point.code == code))
+    if p is None:
+        raise HTTPException(404, "Không có điểm đo này")
+    return p
+
+
+@app.get("/api/history/{code}")
+def api_history(code: str, days: int = 1, s=Depends(db)):
+    """Lịch sử một điểm đo: 1, 7 hoặc 30 ngày gần nhất."""
+    p = _point(s, code)
+    days = max(1, min(days, 90))
+    end = service.utcnow()
+    start = end - timedelta(days=days)
+    return {"code": p.code, "name": p.name, "group": p.group, "days": days,
+            "limits": {"temp_min": p.temp_min, "temp_max": p.temp_max, "hum_min": p.hum_min,
+                       "hum_max": p.hum_max, "ec_max": p.ec_max},
+            "metrics": records.history(s, p.id, start, end)}
+
+
+def _csv_response(text, filename):
+    return Response(text, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": f'attachment; filename="{filename}"'})
+
+
+@app.get("/export/readings.csv")
+def export_readings(code: str = "", start: str = "", end: str = "", s=Depends(db)):
+    """Số đo chi tiết. start/end dạng YYYY-MM-DD (giờ VN, end tính cả ngày). Bỏ trống code = mọi điểm."""
+    today = records.to_local(service.utcnow()).date()
+    d1 = records.parse_day(start, today - timedelta(days=6))
+    d2 = records.parse_day(end, today)
+    t1 = records.to_utc(datetime.combine(d1, datetime.min.time()))
+    t2 = records.to_utc(datetime.combine(d2 + timedelta(days=1), datetime.min.time()))
+    codes = [c for c in code.split(",") if c] or None
+    name = f"so-do_{code or 'tat-ca'}_{d1}_{d2}.csv".replace(",", "-")
+    return _csv_response(records.readings_csv(s, t1, t2, codes), name)
+
+
+@app.get("/export/logbook.csv")
+def export_logbook(month: str = "", s=Depends(db)):
+    y, m = _month(month)
+    return _csv_response(records.logbook_csv(s, y, m), f"so-theo-doi_{y:04d}-{m:02d}.csv")
+
+
+def _month(text):
+    today = records.to_local(service.utcnow()).date()
+    try:
+        y, m = (int(x) for x in text.split("-"))
+        date(y, m, 1)
+        return y, m
+    except (ValueError, TypeError):
+        return today.year, today.month
+
+
+@app.get("/so-theo-doi", response_class=HTMLResponse)
+def logbook_page(request: Request, month: str = "", s=Depends(db)):
+    y, m = _month(month)
+    slots, points, cells = records.logbook(s, y, m)
+    prev = date(y, m, 1) - timedelta(days=1)
+    nxt = date(y + (m == 12), m % 12 + 1, 1)
+    groups = [(GROUPS["fridge"] + " / " + GROUPS["freezer"], [p for p in points if p.group in ("fridge", "freezer")]),
+              (GROUPS["room"], [p for p in points if p.group == "room"]),
+              (GROUPS["ro"], [p for p in points if p.group == "ro"])]
+    return templates.TemplateResponse(request, "logbook.html", {
+        "site": config.SITE_NAME, "year": y, "month": m, "slots": slots, "groups": groups, "cells": cells,
+        "local": records.to_local, "fmt": alarms.fmt, "range_text": alarms.range_text,
+        "prev": f"{prev.year:04d}-{prev.month:02d}", "next": f"{nxt.year:04d}-{nxt.month:02d}",
+        "log_times": ", ".join(config.LOG_TIMES)})
 
 
 @app.get("/tv", response_class=HTMLResponse)

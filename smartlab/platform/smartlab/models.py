@@ -5,10 +5,11 @@ Reading     : từng số đo (nhiệt độ, độ ẩm, EC)
 PointState  : trạng thái hiện tại của mỗi điểm (để dashboard đọc nhanh, tính cảnh báo có độ trễ)
 AlarmEvent  : nhật ký cảnh báo (vượt ngưỡng, mất tín hiệu, trở lại bình thường)
 AuditLog    : ai sửa danh mục, sửa gì, lúc nào (phục vụ ISO 15189)
+LogEntry    : sổ theo dõi ISO 15189 – giá trị mỗi điểm tại các mốc ghi sổ (mặc định 07:00, 13:00)
 """
 from datetime import datetime
 
-from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from .db import Base
@@ -90,3 +91,17 @@ class AuditLog(Base):
     user: Mapped[str] = mapped_column(String(64))
     action: Mapped[str] = mapped_column(String(32))
     detail: Mapped[str] = mapped_column(Text)
+
+
+class LogEntry(Base):
+    """Một dòng sổ theo dõi: giá trị của một điểm đo tại một mốc ghi sổ."""
+    __tablename__ = "log_entries"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    point_id: Mapped[int] = mapped_column(ForeignKey("points.id"))
+    slot: Mapped[datetime] = mapped_column(DateTime)                    # mốc ghi sổ (UTC)
+    temperature: Mapped[float | None] = mapped_column(Float, nullable=True)
+    humidity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    ec: Mapped[float | None] = mapped_column(Float, nullable=True)
+    status: Mapped[str] = mapped_column(String(16))                     # dat | khong_dat | khong_du_lieu
+    note: Mapped[str] = mapped_column(String(255), default="")
+    __table_args__ = (UniqueConstraint("point_id", "slot", name="uq_log_point_slot"),)

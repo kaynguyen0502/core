@@ -46,7 +46,18 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;fl
 .kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}
 .kv span{display:block;font-size:13px;color:var(--mute)}.kv b{font-size:21px;font-variant-numeric:tabular-nums}
 footer{display:flex;gap:22px;flex-wrap:wrap;color:var(--mute);font-size:15px;align-items:center}
-.lg{display:inline-flex;align-items:center;gap:8px}.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
+.lg{display:inline-flex;align-items:center;gap:8px}
+.tile[data-code]{cursor:pointer}.tile[data-code]:hover,.tile[data-code]:focus{outline:2px solid #5b8def;outline-offset:2px}
+footer a{color:#9fc1ff}
+.ov{position:fixed;inset:0;background:rgba(3,7,14,.72);display:none;align-items:center;justify-content:center;padding:16px;z-index:10}
+.ov.on{display:flex}
+.dlg{background:var(--panel);border:1px solid var(--line);border-radius:16px;width:min(1100px,100%);max-height:100%;overflow:auto;padding:18px 20px;display:flex;flex-direction:column;gap:12px}
+.dlg h3{margin:0;font-size:24px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+.btns button,.btns a{font:inherit;font-size:15px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#16243a;color:#dbe4f0;cursor:pointer;text-decoration:none;min-height:40px;box-sizing:border-box}
+.btns button.on{background:#1d5fd1;border-color:#1d5fd1;color:#fff}
+.stats{display:flex;gap:18px;flex-wrap:wrap;color:var(--mute);font-size:15px}.stats b{color:var(--ink)}
+.chart{background:#0d1524;border-radius:12px;padding:8px}.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
 </style>
 </head>
 <body>
@@ -82,8 +93,19 @@ footer{display:flex;gap:22px;flex-wrap:wrap;color:var(--mute);font-size:15px;ali
     <span class="lg"><i style="background:var(--warn)"></i>Gần ngưỡng / đang xác nhận</span>
     <span class="lg"><i style="background:var(--alarm)"></i>Vượt ngưỡng (đã báo Zalo)</span>
     <span class="lg"><i style="background:var(--off)"></i>Mất tín hiệu</span>
+    <a href="/so-theo-doi">Sổ theo dõi ISO</a>
     <span style="margin-left:auto" id="updated"></span>
   </footer>
+</div>
+<div class="ov" id="ov" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
+  <div class="dlg">
+    <div class="row"><h3 id="ovTitle"></h3><div class="btns"><button type="button" id="ovClose">Đóng</button></div></div>
+    <div class="btns" id="ovRange">
+      <button type="button" data-days="1">24 giờ</button><button type="button" data-days="7">7 ngày</button><button type="button" data-days="30">30 ngày</button>
+      <a id="ovCsv" href="#">Tải CSV</a><a href="/so-theo-doi">Sổ theo dõi</a>
+    </div>
+    <div id="ovBody"></div>
+  </div>
 </div>
 <script>
 const TZ = "Asia/Ho_Chi_Minh";
@@ -101,18 +123,18 @@ function spark(vals, state) {
 const head = p => `<div class="row"><span class="code">${esc(p.code)}</span><span class="badge">${LABEL[p.state]}</span></div><div class="name">${esc(p.name)}</div>`;
 
 function fridge(p) {
-  return `<div class="tile ${p.state}">${head(p)}
+  return `<div class="tile ${p.state}" data-code="${esc(p.code)}" role="button" tabindex="0">${head(p)}
     <div class="row" style="align-items:flex-end"><div><span class="val">${esc(p.display)}</span> <span class="unit">°C</span></div>${spark(p.spark, p.state)}</div>
     <div class="note">Ngưỡng ${esc(p.range)}${p.last_seen ? " · " + p.last_seen : ""}</div></div>`;
 }
 function ro(p) {
   const err = p.extra && p.extra.read_error ? ` · đọc lỗi: ${esc(p.extra.read_error)}` : "";
-  return `<div class="tile ${p.state}">${head(p)}
+  return `<div class="tile ${p.state}" data-code="${esc(p.code)}" role="button" tabindex="0">${head(p)}
     <div style="white-space:nowrap"><span class="val" style="font-size:38px">${esc(p.display)}</span> <span class="unit">µS/cm</span></div>
     <div class="note">${esc(p.range)} · ${esc(p.source_label.split(" ")[0])}${p.last_seen ? " · " + p.last_seen : ""}${err}</div></div>`;
 }
 function room(p) {
-  return `<div class="tile ${p.state}">${head(p)}
+  return `<div class="tile ${p.state}" data-code="${esc(p.code)}" role="button" tabindex="0">${head(p)}
     <div class="row" style="align-items:baseline"><span class="val" style="font-size:34px">${esc(p.display)}<span class="unit"> °C</span></span>
     <span class="val" style="font-size:28px">${esc(p.display2)}<span class="unit"> %</span></span></div>
     <div class="note">${esc(p.message || p.range)}</div></div>`;
@@ -155,6 +177,64 @@ function tick() {
   document.getElementById("clock").textContent = n.toLocaleTimeString("vi-VN", {timeZone: TZ, hour: "2-digit", minute: "2-digit"});
   document.getElementById("date").textContent = n.toLocaleDateString("vi-VN", {timeZone: TZ, weekday: "long", day: "2-digit", month: "2-digit", year: "numeric"});
 }
+const MET = {temperature: ["Nhiệt độ", "°C", 1], humidity: ["Độ ẩm", "%", 0], ec: ["EC", "µS/cm", 2]};
+const vn = (v, d) => v == null ? "--" : v.toFixed(d).replace(".", ",").replace("-", "−");
+let ovCode = null, ovDays = 1;
+
+function chart(m, info, lim) {
+  const W = 1000, H = 240, L = 56, R = 12, T = 12, B = 30;
+  const s = info.series; if (!s.length) return "";
+  const t = s.map(p => Date.parse(p[0])), v = s.map(p => p[1]);
+  const lines = [lim[0], lim[1]].filter(x => x != null);
+  let lo = Math.min(...v, ...lines), hi = Math.max(...v, ...lines);
+  const pad = (hi - lo) * 0.1 || 1; lo -= pad; hi += pad;
+  const t0 = t[0], t1 = t[t.length - 1] || t0 + 1;
+  const X = x => L + (x - t0) / ((t1 - t0) || 1) * (W - L - R), Y = y => T + (hi - y) / (hi - lo) * (H - T - B);
+  const pts = s.map((p, i) => `${X(t[i]).toFixed(1)},${Y(v[i]).toFixed(1)}`).join(" ");
+  const lab = x => new Date(x).toLocaleString("vi-VN", {timeZone: TZ, day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit"});
+  const d = MET[m][2];
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Biểu đồ ${MET[m][0]}">
+    ${lines.map(y => `<line x1="${L}" x2="${W - R}" y1="${Y(y)}" y2="${Y(y)}" stroke="#ff5a5a" stroke-dasharray="6 5"/><text x="${L - 6}" y="${Y(y) + 4}" fill="#ff8a8a" font-size="12" text-anchor="end">${vn(y, d)}</text>`).join("")}
+    <text x="${L - 6}" y="${T + 10}" fill="#a9b8cf" font-size="12" text-anchor="end">${vn(hi, d)}</text>
+    <text x="${L - 6}" y="${H - B}" fill="#a9b8cf" font-size="12" text-anchor="end">${vn(lo, d)}</text>
+    <polyline points="${pts}" fill="none" stroke="#5b8def" stroke-width="2" stroke-linejoin="round"/>
+    <text x="${L}" y="${H - 8}" fill="#a9b8cf" font-size="12">${lab(t0)}</text>
+    <text x="${W - R}" y="${H - 8}" fill="#a9b8cf" font-size="12" text-anchor="end">${lab(t1)}</text></svg>`;
+}
+
+async function openHistory(code, days) {
+  ovCode = code; ovDays = days;
+  document.getElementById("ov").classList.add("on");
+  document.querySelectorAll("#ovRange button").forEach(b => b.classList.toggle("on", +b.dataset.days === days));
+  const end = new Date(), start = new Date(end.getTime() - (days - 1) * 864e5);
+  const day = x => x.toLocaleDateString("sv-SE", {timeZone: TZ});
+  document.getElementById("ovCsv").href = `/export/readings.csv?code=${encodeURIComponent(code)}&start=${day(start)}&end=${day(end)}`;
+  const body = document.getElementById("ovBody");
+  body.textContent = "Đang tải…";
+  try {
+    const d = await (await fetch(`/api/history/${encodeURIComponent(code)}?days=${days}`, {cache: "no-store"})).json();
+    document.getElementById("ovTitle").textContent = `${d.code} · ${d.name}`;
+    const L = d.limits, lims = {temperature: [L.temp_min, L.temp_max], humidity: [L.hum_min, L.hum_max], ec: [null, L.ec_max]};
+    const parts = Object.keys(MET).filter(m => d.metrics[m]).map(m => {
+      const i = d.metrics[m], [name, unit, dg] = MET[m];
+      return `<div class="stats"><b>${name} (${unit})</b><span>Thấp nhất <b>${vn(i.min, dg)}</b></span><span>Cao nhất <b>${vn(i.max, dg)}</b></span><span>Trung bình <b>${vn(i.avg, dg)}</b></span><span>${i.count} lần đo</span></div><div class="chart">${chart(m, i, lims[m])}</div>`;
+    });
+    body.innerHTML = parts.join("") || `<p class="stats">Chưa có số đo trong khoảng thời gian này.</p>`;
+  } catch (e) { body.textContent = "Không tải được dữ liệu."; }
+}
+function closeHistory() { document.getElementById("ov").classList.remove("on"); ovCode = null; }
+document.addEventListener("click", e => {
+  const t = e.target.closest("[data-code]");
+  if (t) openHistory(t.dataset.code, 1);
+  const b = e.target.closest("#ovRange button");
+  if (b && ovCode) openHistory(ovCode, +b.dataset.days);
+  if (e.target.id === "ovClose" || e.target.id === "ov") closeHistory();
+});
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeHistory();
+  if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.code) { e.preventDefault(); openHistory(e.target.dataset.code, 1); }
+});
+
 refresh(); tick(); setInterval(refresh, 10000); setInterval(tick, 1000);
 </script>
 </body>

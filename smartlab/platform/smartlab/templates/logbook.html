@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sổ theo dõi {{ "%02d"|format(month) }}/{{ year }} – SmartLab</title>
+<style>
+body{margin:0;background:#f6f8fb;color:#142033;font-family:Inter,"Segoe UI",system-ui,sans-serif}
+.wrap{max-width:1600px;margin:0 auto;padding:20px 16px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:24px}h2{margin:0;font-size:18px}
+.bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+a.btn,button{font:inherit;font-size:14px;padding:8px 14px;border-radius:8px;border:1px solid #c3cedd;background:#fff;color:#142033;text-decoration:none;cursor:pointer;min-height:36px;box-sizing:border-box}
+a.btn.primary,button.primary{background:#1d5fd1;border-color:#1d5fd1;color:#fff}
+.note{color:#3d4b61;font-size:14px}
+.box{background:#fff;border:1px solid #d8e0ec;border-radius:12px;overflow-x:auto}
+table{border-collapse:collapse;font-size:13px;width:100%}
+th,td{border:1px solid #e3e9f2;padding:4px 6px;text-align:center;white-space:nowrap}
+th{background:#e9eff8;font-weight:700}
+th small{display:block;font-weight:400;color:#3d4b61}
+td.when{text-align:left;font-weight:600;background:#f8fafd}
+td.khong_dat{background:#ffe1e1;color:#9b1c1c;font-weight:700}
+td.khong_du_lieu{color:#8a97aa}
+.legend span{display:inline-block;padding:2px 8px;border-radius:6px;margin-right:8px}
+.sign{display:none}
+@media print{
+  @page{size:A4 landscape;margin:10mm}
+  body{background:#fff}.wrap{padding:0;max-width:none}
+  .noprint{display:none!important}
+  .box{border:0;overflow:visible}
+  table{font-size:9px}th,td{padding:2px 3px}
+  section{break-inside:avoid-page}
+  .sign{display:flex;justify-content:space-around;margin-top:16px;font-size:12px}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div>
+    <h1>Sổ theo dõi nhiệt độ – độ ẩm – nước RO · Tháng {{ "%02d"|format(month) }}/{{ year }}</h1>
+    <div class="note">{{ site }} · Ghi tự động lúc {{ log_times }} (giá trị gần mốc nhất trong 30 phút trước mốc) · ISO 15189:2022</div>
+  </div>
+  <div class="bar noprint">
+    <a class="btn" href="/so-theo-doi?month={{ prev }}">‹ Tháng trước</a>
+    <a class="btn" href="/so-theo-doi?month={{ next }}">Tháng sau ›</a>
+    <button class="primary" type="button" onclick="window.print()">In sổ</button>
+    <a class="btn" href="/export/logbook.csv?month={{ "%04d-%02d"|format(year, month) }}">Tải CSV sổ theo dõi</a>
+    <a class="btn" href="/export/readings.csv?start={{ "%04d-%02d-01"|format(year, month) }}&end={{ next }}-01">Tải CSV số đo chi tiết</a>
+    <a class="btn" href="/tv">Về dashboard</a>
+  </div>
+  <div class="legend note">
+    <span style="background:#ffe1e1;color:#9b1c1c">Đỏ: không đạt (ngoài ngưỡng)</span>
+    <span style="color:#8a97aa">—: không có dữ liệu</span>
+  </div>
+
+  {% if not slots %}
+  <div class="box" style="padding:20px">Tháng này chưa có dòng sổ nào. Sổ được ghi tự động lúc {{ log_times }} mỗi ngày.</div>
+  {% endif %}
+
+  {% for title, pts in groups if pts and slots %}
+  <section>
+    <h2>{{ title }}</h2>
+    <div class="box">
+      <table>
+        <thead><tr>
+          <th>Ngày giờ</th>
+          {% for p in pts %}
+          <th>{{ p.code }}<small>{{ p.name }}</small>
+            <small>{% if p.group == 'ro' %}{{ range_text(None, p.ec_max, 'ec') }}{% else %}{{ range_text(p.temp_min, p.temp_max, 'temperature') }}{% if p.group == 'room' %} · {{ range_text(p.hum_min, p.hum_max, 'humidity') }}{% endif %}{% endif %}</small></th>
+          {% endfor %}
+        </tr></thead>
+        <tbody>
+        {% for slot in slots %}
+          <tr>
+            <td class="when">{{ local(slot).strftime('%d/%m %H:%M') }}</td>
+            {% for p in pts %}
+              {% set e = cells.get((slot, p.code)) %}
+              {% if e is none %}
+                <td class="khong_du_lieu">—</td>
+              {% else %}
+                <td class="{{ e.status }}" title="{{ e.note }}">
+                  {% if e.status == 'khong_du_lieu' %}—
+                  {% elif p.group == 'ro' %}{{ fmt(e.ec, 2) }}
+                  {% elif p.group == 'room' %}{{ fmt(e.temperature) }}° / {{ fmt(e.humidity, 0) }}%
+                  {% else %}{{ fmt(e.temperature) }}{% endif %}
+                </td>
+              {% endif %}
+            {% endfor %}
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endfor %}
+
+  <div class="sign">
+    <div>Người kiểm tra<br><br><br>………………………</div>
+    <div>Trưởng khoa<br><br><br>………………………</div>
+  </div>
+</div>
+</body>
+</html>

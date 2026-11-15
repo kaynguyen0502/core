@@ -166,3 +166,76 @@ def test_one_sided_freezer_threshold(session):
 def test_seed_precreates_states(session):
     # mọi điểm có sẵn bản ghi trạng thái -> không có hai luồng cùng tạo một lúc
     assert session.query(PointState).count() == session.query(Point).count() == 23
+
+
+# ---------- sổ theo dõi ISO, lịch sử, xuất dữ liệu ----------
+from smartlab import records  # noqa: E402
+from smartlab.models import LogEntry  # noqa: E402
+
+
+def _vn(y, mo, d, h, mi=0):
+    """Giờ Việt Nam -> UTC (naive) để gửi vào hệ thống."""
+    return records.to_utc(datetime(y, mo, d, h, mi))
+
+
+def test_logbook_slot_picks_nearest_and_flags(session):
+    # SH25-M: 06:40 = 5,0 ; 06:58 = 9,1 (gần 07:00 nhất, vượt 8 °C)
+    _send(session, "zigbee2mqtt/hs/sh25_mat", '{"temperature": 5.0}', _vn(2026, 11, 20, 6, 40))
+    _send(session, "zigbee2mqtt/hs/sh25_mat", '{"temperature": 9.1}', _vn(2026, 11, 20, 6, 58))
+    # MT01 đo lúc 06:10 -> ngoài cửa sổ 30 phút -> không có dữ liệu
+    _send(session, "zigbee2mqtt/hs/mt01", '{"temperature": 22, "humidity": 60}', _vn(2026, 11, 20, 6, 10))
+    slot = _vn(2026, 11, 20, 7)
+    added = records.record_slot(session, slot)
+    assert added == 21  # 12 ngăn tủ + 6 phòng + 3 RO (không tính máy XN)
+    e = {session.get(Point, x.point_id).code: x for x in session.query(LogEntry).all()}
+    assert e["SH25-M"].temperature == 9.1 and e["SH25-M"].status == "khong_dat"
+    assert e["MT01"].status == "khong_du_lieu"
+    assert records.record_slot(session, slot) == 0  # chạy lại không ghi trùng
+
+
+def test_record_due_slots_catches_up(session):
+    _send(session, "zigbee2mqtt/hs/sh26_mat", '{"temperature": 4.5}', _vn(2026, 11, 20, 12, 50))
+    # máy chủ bật lại lúc 15:00 -> ghi bù mốc 07:00 và 13:00 hôm nay + hôm qua
+    n = records.record_due_slots(session, now_utc=_vn(2026, 11, 20, 15))
+    assert n == 21 * 4
+    st = {(records.to_local(x.slot).hour, session.get(Point, x.point_id).code): x for x in session.query(LogEntry).all()
+          if records.to_local(x.slot).day == 20}
+    assert st[(13, "SH26-M")].temperature == 4.5 and st[(13, "SH26-M")].status == "dat"
+    assert records.record_due_slots(session, now_utc=_vn(2026, 11, 20, 15, 30)) == 0
+    # trước 07:05 chưa ghi mốc 07:00 của ngày mới
+    assert records.record_due_slots(session, now_utc=_vn(2026, 11, 21, 7, 2)) == 0
+
+
+def test_logbook_csv_and_monthly_export(session, tmp_path):
+    _send(session, "zigbee2mqtt/hs/sh19_mat", '{"temperature": 4.6}', _vn(2026, 10, 15, 6, 55))
+    records.record_slot(session, _vn(2026, 10, 15, 7))
+    text = records.logbook_csv(session, 2026, 10)
+    assert text.startswith("﻿Ngày,Giờ,Mã") and "2026-10-15,07:00,SH19-M" in text and "Đạt" in text
+    folder = records.export_previous_month_if_due(session, now_utc=_vn(2026, 11, 1, 0, 30), base_dir=str(tmp_path))
+    assert folder and sorted(os.listdir(folder)) == ["so-do-chi-tiet_2026-10.csv", "so-theo-doi_2026-10.csv"]
+    detail = open(os.path.join(folder, "so-do-chi-tiet_2026-10.csv"), encoding="utf-8").read()
+    assert "SH19-M" in detail and "2026-10-15 06:55:00" in detail
+    assert records.export_previous_month_if_due(session, now_utc=_vn(2026, 11, 2, 9), base_dir=str(tmp_path)) is None
+
+
+def test_history_api_and_pages(session):
+    from fastapi.testclient import TestClient
+    from smartlab import web
+
+    now = service.utcnow()
+    for i in range(30):
+        _send(session, "zigbee2mqtt/hs/mt02", '{"temperature": %s, "humidity": 55}' % (22 + i % 3), now - timedelta(minutes=30 - i))
+    records.record_slot(session, now - timedelta(minutes=5))
+    c = TestClient(web.app)
+    d = c.get("/api/history/MT02?days=1").json()
+    assert d["metrics"]["temperature"]["min"] == 22 and d["metrics"]["temperature"]["max"] == 24
+    assert d["metrics"]["humidity"]["count"] == 30 and d["limits"]["temp_max"] == 25
+    assert d["metrics"]["temperature"]["series"][0][0].endswith("+07:00")
+    assert c.get("/api/history/XX99").status_code == 404
+    r = c.get("/export/readings.csv?code=MT02")
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"] and "MT02" in r.text
+    month = records.to_local(now).strftime("%Y-%m")
+    page = c.get(f"/so-theo-doi?month={month}")
+    assert page.status_code == 200 and "MT02" in page.text and "In sổ" in page.text
+    assert c.get(f"/export/logbook.csv?month={month}").status_code == 200
+    assert 'data-code' in c.get("/tv").text
