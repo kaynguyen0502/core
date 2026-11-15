@@ -155,8 +155,12 @@ async def catalog_save(code: str, request: Request, user=Depends(admin), s=Depen
         if creating or old != new:
             changes.append(f"{f}: {old!r} → {new!r}")
             setattr(p, f, new)
+    if creating:
+        s.flush()
     if changes:
         s.add(AuditLog(ts=service.utcnow(), user=user, action="tạo" if creating else "sửa",
                        detail=f"{p.code}: " + "; ".join(changes)))
     s.commit()
+    if creating:
+        service.ensure_states(s)
     return RedirectResponse("/catalog", status_code=303)

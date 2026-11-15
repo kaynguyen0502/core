@@ -161,3 +161,8 @@ def test_one_sided_freezer_threshold(session):
     _send(session, "zigbee2mqtt/hs/sh20_dong", '{"temperature": -50}', T0)
     st = session.get(PointState, session.query(Point).filter_by(code="SH20-D").one().id)
     assert st.state == "ok"
+
+
+def test_seed_precreates_states(session):
+    # mọi điểm có sẵn bản ghi trạng thái -> không có hai luồng cùng tạo một lúc
+    assert session.query(PointState).count() == session.query(Point).count() == 23

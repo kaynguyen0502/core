@@ -8,12 +8,14 @@
 # Chạy lại nhiều lần được: mật khẩu đã tạo được giữ nguyên, dịch vụ được cài lại.
 # Cài: Python, Node.js, Git, Mosquitto, NSSM (qua winget nếu thiếu), Zigbee2MQTT, phần mềm SmartLab.
 # Dùng MySQL đã có trên máy (MySQL của Reagent Manager), tạo schema riêng "smartlab".
+# Máy thử nghiệm không có MySQL: dùng SQLite (tự hỏi, hoặc chạy với -UseSQLite).
 
 param(
     [string]$InstallDir = "C:\SmartLab",
     [string]$ZigbeePort = "",
     [string]$MySqlBin = "",
-    [string]$MySqlRootUser = "root"
+    [string]$MySqlRootUser = "root",
+    [switch]$UseSQLite
 )
 
 # "Continue": lệnh ngoài (nssm, py...) ghi ra stderr không làm dừng script; lỗi kiểm tra bằng mã thoát
@@ -101,9 +103,20 @@ if (-not $MySqlBin) {
              Sort-Object FullName | Select-Object -Last 1
     if ($found) { $MySqlBin = $found.FullName }
 }
-if (-not $MySqlBin -or -not (Test-Path $MySqlBin)) { Fail "Không tìm thấy mysql.exe. Chạy lại với -MySqlBin 'đường dẫn\mysql.exe'." }
-$MySqlService = (Get-Service | Where-Object { $_.Name -like "MySQL*" } | Select-Object -First 1).Name
-Info "MySQL: $MySqlBin (dịch vụ: $MySqlService)"
+$MySqlService = $null
+if (-not $UseSQLite -and (-not $MySqlBin -or -not (Test-Path $MySqlBin))) {
+    Info "Không tìm thấy MySQL trên máy này."
+    $ans = Read-Host "    Dùng SQLite (một file dữ liệu, hợp cho máy thử nghiệm)? Y/N"
+    if ($ans -notmatch '^[Yy]') { Fail "Cài MySQL rồi chạy lại, hoặc chạy với -MySqlBin 'đường dẫn\mysql.exe'." }
+    $UseSQLite = $true
+}
+if ($UseSQLite) {
+    New-Item -ItemType Directory -Force -Path "$InstallDir\data" | Out-Null
+    Info "Cơ sở dữ liệu: SQLite tại $InstallDir\data\smartlab.db"
+} else {
+    $MySqlService = (Get-Service | Where-Object { $_.Name -like "MySQL*" } | Select-Object -First 1).Name
+    Info "MySQL: $MySqlBin (dịch vụ: $MySqlService)"
+}
 
 # ---------------------------------------------------------------- 2. Mật khẩu (.env)
 Step "Tạo / đọc cấu hình .env"
@@ -124,10 +137,12 @@ $ro1Pw   = Keep "RO01_MQTT_PASSWORD"     (New-Password)
 $ro2Pw   = Keep "RO02_MQTT_PASSWORD"     (New-Password)
 $adminPw = Keep "SMARTLAB_ADMIN_PASSWORD" (New-Password)
 
+$dbUrl = if ($UseSQLite) { "sqlite:///$($InstallDir -replace '\\','/')/data/smartlab.db" }
+         else { "mysql+pymysql://smartlab:$dbPw@localhost:3306/smartlab?charset=utf8mb4" }
 $envText = @"
 # SmartLab – cấu hình máy chủ (tạo bởi install_windows.ps1). Giữ bí mật file này.
 SMARTLAB_DB_PASSWORD=$dbPw
-SMARTLAB_DB_URL=mysql+pymysql://smartlab:$dbPw@localhost:3306/smartlab?charset=utf8mb4
+SMARTLAB_DB_URL=$dbUrl
 SMARTLAB_MQTT_HOST=localhost
 SMARTLAB_MQTT_PORT=1883
 SMARTLAB_MQTT_USER=smartlab
@@ -159,6 +174,7 @@ Run $VPy @("-m", "pip", "install", "--upgrade", "pip", "-q")
 Run $VPy @("-m", "pip", "install", "-r", "$App\requirements.txt", "-q")
 
 # ---------------------------------------------------------------- 4. MySQL
+if (-not $UseSQLite) {
 Step "Tạo schema MySQL 'smartlab' và tài khoản riêng"
 $rootSecure = Read-Host "    Nhập mật khẩu tài khoản '$MySqlRootUser' của MySQL" -AsSecureString
 $env:MYSQL_PWD = [Runtime.InteropServices.Marshal]::PtrToStringAuto(
@@ -172,6 +188,7 @@ $code = $LASTEXITCODE
 Remove-Item Env:\MYSQL_PWD
 if ($code -ne 0) { Fail "Không tạo được schema MySQL (sai mật khẩu root?)." }
 Info "Đã tạo schema smartlab (không đụng dữ liệu Reagent Manager)."
+}
 
 Push-Location $App
 Run $VPy @("-m", "smartlab.seed")

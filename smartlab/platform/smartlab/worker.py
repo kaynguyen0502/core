@@ -3,6 +3,7 @@
 Chạy: python -m smartlab.worker
 """
 import logging
+import threading
 import time
 
 import paho.mqtt.client as mqtt
@@ -12,6 +13,8 @@ from .db import SessionLocal, init_db
 
 log = logging.getLogger("smartlab.worker")
 CHECK_EVERY_S = 30
+# Luồng nhận MQTT và luồng kiểm tra định kỳ cùng sửa trạng thái: cho chạy lần lượt
+LOCK = threading.Lock()
 HEARTBEAT_EVERY_S = 60
 
 
@@ -26,7 +29,7 @@ def on_connect(client, userdata, flags, reason_code, properties):
 
 def on_message(client, userdata, msg):
     try:
-        with SessionLocal() as s:
+        with LOCK, SessionLocal() as s:
             events = service.handle_message(s, msg.topic, msg.payload)
             if events:
                 notify.send_events(events)
@@ -38,6 +41,8 @@ def on_message(client, userdata, msg):
 def run():
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
     init_db()
+    with SessionLocal() as s:
+        service.ensure_states(s)
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="smartlab-worker")
     if config.MQTT_USER:
         client.username_pw_set(config.MQTT_USER, config.MQTT_PASSWORD)
@@ -51,7 +56,7 @@ def run():
     last_hb = 0.0
     while True:
         try:
-            with SessionLocal() as s:
+            with LOCK, SessionLocal() as s:
                 events = service.check_all(s, remind_minutes=config.REMIND_MINUTES, seen_floor=started)
                 if events:
                     notify.send_events(events)

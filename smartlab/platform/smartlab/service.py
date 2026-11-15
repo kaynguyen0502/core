@@ -19,6 +19,15 @@ def _state(session, point):
     return st
 
 
+def ensure_states(session):
+    """Tạo sẵn bản ghi trạng thái cho mọi điểm đo, tránh hai luồng cùng tạo một lúc."""
+    have = set(session.scalars(select(PointState.point_id)))
+    for pid in session.scalars(select(Point.id)):
+        if pid not in have:
+            session.add(PointState(point_id=pid, values={}, extra={}, state="ok", message=""))
+    session.commit()
+
+
 def _record(session, point, events, now):
     out = []
     for kind, msg in events:

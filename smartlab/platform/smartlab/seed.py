@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from .db import SessionLocal, init_db
 from .models import Point
+from .service import ensure_states
 
 # Cảm biến Sonoff gửi khi số thay đổi, chậm nhất 60 phút/lần -> 90 phút mới coi là mất tín hiệu
 ZB_OFFLINE = 90
@@ -67,6 +68,7 @@ def seed(session):
         session.add(Point(sort=i, **p))
         added += 1
     session.commit()
+    ensure_states(session)
     return added
 
 
