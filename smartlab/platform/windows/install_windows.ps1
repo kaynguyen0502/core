@@ -4,6 +4,7 @@
 #   Set-ExecutionPolicy -Scope Process Bypass -Force
 #   .\install_windows.ps1                      # tự tìm cổng COM của USB Zigbee
 #   .\install_windows.ps1 -ZigbeePort COM4     # hoặc chỉ định cổng
+#   .\install_windows.ps1 -ZigbeeAdapter ember # ZBDongle-E ("V2"); ZBDongle-P là zstack (mặc định: tự nhận)
 #
 # Chạy lại nhiều lần được: mật khẩu đã tạo được giữ nguyên, dịch vụ được cài lại.
 # Cài: Python, Node.js, Git, Mosquitto, NSSM (qua winget nếu thiếu), Zigbee2MQTT, phần mềm SmartLab.
@@ -15,7 +16,9 @@ param(
     [string]$ZigbeePort = "",
     [string]$MySqlBin = "",
     [string]$MySqlRootUser = "root",
-    [switch]$UseSQLite
+    [switch]$UseSQLite,
+    [ValidateSet("auto", "zstack", "ember")]
+    [string]$ZigbeeAdapter = "auto"
 )
 
 # "Continue": lệnh ngoài (nssm, py...) ghi ra stderr không làm dừng script; lỗi kiểm tra bằng mã thoát
@@ -229,17 +232,38 @@ Run "pnpm" @("install", "--frozen-lockfile")
 Run "pnpm" @("run", "build")
 Pop-Location
 
-if (-not $ZigbeePort) {
-    $dev = Get-CimInstance Win32_PnPEntity | Where-Object {
-        $_.Name -match '\((COM\d+)\)' -and $_.Name -match 'CP210|Silicon Labs|USB Serial|Sonoff|CH340'
-    } | Select-Object -First 1
+# Cổng COM của USB Zigbee. Bỏ qua cổng Bluetooth ("Standard Serial over Bluetooth link").
+#   ZBDongle-P: chip CP2102N -> "Silicon Labs CP210x ... (COMx)"      -> adapter zstack
+#   ZBDongle-E ("V2"): chip CH9102F -> "USB-Enhanced-SERIAL CH9102 (COMx)" -> adapter ember
+$dev = $null
+$ports = Get-CimInstance Win32_PnPEntity | Where-Object {
+    $_.Name -match '\((COM\d+)\)' -and $_.Name -notmatch 'Bluetooth'
+}
+if ($ZigbeePort) {
+    $dev = $ports | Where-Object { $_.Name -match "\($ZigbeePort\)" } | Select-Object -First 1
+} else {
+    $dev = $ports | Where-Object { $_.Name -match 'CP210|Silicon Labs|CH910|CH343|CH340|USB-Enhanced|Sonoff' } |
+           Select-Object -First 1
     if ($dev -and $dev.Name -match '\((COM\d+)\)') { $ZigbeePort = $Matches[1] }
+}
+if (-not $ZigbeePort) {
+    $usbZb = Get-CimInstance Win32_PnPEntity | Where-Object { $_.Name -match 'Sonoff|Zigbee' -and $_.Name -notmatch '\(COM' }
+    if ($usbZb) {
+        Info "Thấy '$($usbZb[0].Name)' nhưng CHƯA có driver (nằm trong Other devices)."
+        Info "  - Tên có 'V2' (ZBDongle-E): cài driver WCH CH343SER (wch-ic.com)."
+        Info "  - ZBDongle-P: cài driver Silicon Labs CP210x VCP (silabs.com)."
+        Fail "Cài driver, rút cắm lại USB, thấy cổng COM trong Device Manager rồi chạy lại."
+    }
 }
 if (-not $ZigbeePort) {
     Info "Không tự tìm thấy USB Zigbee. Mở Device Manager > Ports (COM & LPT) để xem cổng."
     $ZigbeePort = Read-Host "    Nhập cổng COM của ZBDongle-P (vd COM4)"
 }
-Info "USB Zigbee: $ZigbeePort"
+if ($ZigbeeAdapter -eq "auto") {
+    $ZigbeeAdapter = "zstack"
+    if ($dev -and $dev.Name -match 'CH910|CH343|USB-Enhanced') { $ZigbeeAdapter = "ember" }
+}
+Info "USB Zigbee: $ZigbeePort (adapter: $ZigbeeAdapter$(if ($dev) { ", $($dev.Name)" }))"
 
 New-Item -ItemType Directory -Force -Path "$Z2m\data" | Out-Null
 $z2mConf = "$Z2m\data\configuration.yaml"
@@ -258,7 +282,7 @@ mqtt:
   password: $z2mPw
 serial:
   port: $ZigbeePort
-  adapter: zstack
+  adapter: $ZigbeeAdapter
 advanced:
   channel: 25
   network_key: GENERATE
