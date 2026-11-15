@@ -203,7 +203,7 @@ Run $VPy @("-m", "smartlab.seed")
 Pop-Location
 
 # ---------------------------------------------------------------- 5. Mosquitto
-Step "Cấu hình Mosquitto (MQTT, cổng 1883, có mật khẩu)"
+Step "Cấu hình Mosquitto (MQTT, cổng $MqttPort, có mật khẩu)"
 # Chỉ dừng dịch vụ của chính SmartLab. MQTT của dự án khác (vd huyết học) KHÔNG tự tắt.
 & nssm stop SmartLab-MQTT *> $null
 Start-Sleep -Seconds 2
