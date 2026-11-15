@@ -20,7 +20,9 @@ param(
     [switch]$UseSQLite,
     [ValidateSet("auto", "zstack", "ember")]
     [string]$ZigbeeAdapter = "auto",
-    [int]$MqttPort = 1883
+    [int]$MqttPort = 1883,
+    [int]$WebPort = 8000,
+    [int]$Z2mPort = 8080
 )
 
 # "Continue": lệnh ngoài (nssm, py...) ghi ra stderr không làm dừng script; lỗi kiểm tra bằng mã thoát
@@ -240,6 +242,26 @@ Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "zigbee2mqtt", $z2mPw)
 Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "ro01", $ro1Pw)
 Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "ro02", $ro2Pw)
 
+# ---------------------------------------------------------------- 5b. Cổng web
+# Cổng dashboard / Zigbee2MQTT đã bị chương trình khác dùng -> tự chọn cổng trống kế tiếp
+& nssm stop SmartLab-Web *> $null
+& nssm stop SmartLab-Zigbee2MQTT *> $null
+Start-Sleep -Seconds 2
+function Get-FreePort([int]$port, [string]$label) {
+    for ($p = $port; $p -lt $port + 20; $p++) {
+        $l = Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+        if (-not $l) {
+            if ($p -ne $port) { Info "${label}: cổng $port đang bận, dùng cổng $p" }
+            return $p
+        }
+        $who = (Get-Process -Id $l.OwningProcess -ErrorAction SilentlyContinue).ProcessName
+        Info "${label}: cổng $p đang được '$who' dùng"
+    }
+    Fail "Không tìm được cổng trống cho $label từ $port."
+}
+$WebPort = Get-FreePort $WebPort "Dashboard"
+$Z2mPort = Get-FreePort $Z2mPort "Zigbee2MQTT"
+
 # ---------------------------------------------------------------- 6. Zigbee2MQTT
 Step "Cài Zigbee2MQTT"
 if (-not (Test-Path "$Z2m\package.json")) {
@@ -312,7 +334,7 @@ homeassistant:
   enabled: false
 frontend:
   enabled: true
-  port: 8080
+  port: $Z2mPort
 mqtt:
   base_topic: zigbee2mqtt
   server: mqtt://localhost:$MqttPort
@@ -330,7 +352,12 @@ advanced:
 "@
     Write-Utf8NoBom $z2mConf $yaml
 } else {
-    Info "Giữ nguyên $z2mConf (đã có, có thể đã ghép cảm biến)."
+    # Giữ nguyên cấu hình (có thể đã ghép cảm biến), chỉ cập nhật cổng giao diện và cổng MQTT
+    $yaml = [IO.File]::ReadAllText($z2mConf)
+    $yaml = [regex]::Replace($yaml, '(?ms)(^frontend:.*?^\s+port:\s*)\d+', "`${1}$Z2mPort")
+    $yaml = [regex]::Replace($yaml, 'mqtt://localhost:\d+', "mqtt://localhost:$MqttPort")
+    Write-Utf8NoBom $z2mConf $yaml
+    Info "Giữ nguyên $z2mConf, cập nhật cổng giao diện $Z2mPort."
 }
 
 # ---------------------------------------------------------------- 7. Dịch vụ Windows
@@ -376,11 +403,11 @@ $NodeExe = (Get-Command node).Source
 Install-SmartLabService "SmartLab-MQTT" "$MosqDir\mosquitto.exe" "-c `"$Mq\mosquitto.conf`"" $Mq @()
 Install-SmartLabService "SmartLab-Zigbee2MQTT" $NodeExe "index.js" $Z2m @("SmartLab-MQTT")
 Install-SmartLabService "SmartLab-Worker" $VPy "-m smartlab.worker" $App @("SmartLab-MQTT", $MySqlService)
-Install-SmartLabService "SmartLab-Web" $VPy "-m uvicorn smartlab.web:app --host 0.0.0.0 --port 8000" $App @($MySqlService)
+Install-SmartLabService "SmartLab-Web" $VPy "-m uvicorn smartlab.web:app --host 0.0.0.0 --port $WebPort" $App @($MySqlService)
 
 # ---------------------------------------------------------------- 8. Tường lửa, nguồn điện
-Step "Mở tường lửa cho mạng nội bộ (8000 dashboard, 8080 Zigbee2MQTT, $MqttPort MQTT)"
-foreach ($port in 8000, 8080, $MqttPort) {
+Step "Mở tường lửa cho mạng nội bộ ($WebPort dashboard, $Z2mPort Zigbee2MQTT, $MqttPort MQTT)"
+foreach ($port in $WebPort, $Z2mPort, $MqttPort) {
     $rule = "SmartLab TCP $port"
     Get-NetFirewallRule -DisplayName $rule -ErrorAction SilentlyContinue | Remove-NetFirewallRule
     New-NetFirewallRule -DisplayName $rule -Direction Inbound -Protocol TCP -LocalPort $port `
@@ -396,9 +423,9 @@ powercfg /hibernate off
 $ip = (Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.IPAddress -notlike "127.*" -and $_.PrefixOrigin -ne "WellKnown" } |
        Select-Object -First 1).IPAddress
 Write-Host "`n================ CÀI ĐẶT XONG ================" -ForegroundColor Green
-Write-Host "Dashboard TV       : http://${ip}:8000/tv"
-Write-Host "Danh mục điểm đo   : http://${ip}:8000/catalog   (admin / $adminPw)"
-Write-Host "Ghép cảm biến      : http://${ip}:8080"
+Write-Host "Dashboard TV       : http://${ip}:$WebPort/tv"
+Write-Host "Danh mục điểm đo   : http://${ip}:$WebPort/catalog   (admin / $adminPw)"
+Write-Host "Ghép cảm biến      : http://${ip}:$Z2mPort"
 Write-Host "MQTT cho camera RO : máy chủ $ip, cổng $MqttPort; ro01 / $ro1Pw ; ro02 / $ro2Pw"
 Write-Host "Mật khẩu lưu tại   : $EnvFile (chỉ Administrators đọc được)"
 Write-Host "Nhật ký            : $Logs"
