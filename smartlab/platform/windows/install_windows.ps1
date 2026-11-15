@@ -93,6 +93,7 @@ if (-not $PyExe) {
 Info "Python: $PyExe"
 
 $nodeMajor = [int]((& node -v).TrimStart("v").Split(".")[0])
+if ($nodeMajor -gt 24) { Info "Lưu ý: Node.js $(& node -v) mới hơn bản Zigbee2MQTT hỗ trợ chính thức (22/24). Nếu Zigbee2MQTT lỗi, cài Node.js 24 LTS." }
 if ($nodeMajor -lt 22) { Fail "Zigbee2MQTT cần Node.js 22 trở lên (máy đang có $(& node -v)). Cập nhật: winget upgrade OpenJS.NodeJS.LTS" }
 
 $MosqDir = "$env:ProgramFiles\mosquitto"
@@ -203,9 +204,17 @@ Pop-Location
 Step "Cấu hình Mosquitto (MQTT, cổng 1883, có mật khẩu)"
 $defaultSvc = Get-Service -Name "mosquitto" -ErrorAction SilentlyContinue
 if ($defaultSvc) {
-    Stop-Service mosquitto -Force -ErrorAction SilentlyContinue
     Set-Service mosquitto -StartupType Disabled
+    & sc.exe stop mosquitto *> $null
     Info "Đã tắt dịch vụ mosquitto mặc định (thay bằng SmartLab-MQTT)."
+}
+& nssm stop SmartLab-MQTT *> $null
+Get-Process mosquitto -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Start-Sleep -Seconds 2
+$busy = Get-NetTCPConnection -LocalPort 1883 -State Listen -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($busy) {
+    $proc = Get-Process -Id $busy.OwningProcess -ErrorAction SilentlyContinue
+    Fail "Cổng 1883 đang bị chương trình '$($proc.ProcessName)' (PID $($busy.OwningProcess), $($proc.Path)) chiếm. Tắt chương trình đó rồi chạy lại."
 }
 $mqConf = @"
 listener 1883
@@ -213,7 +222,7 @@ allow_anonymous false
 password_file $($Mq -replace '\\','/')/passwd
 persistence true
 persistence_location $($Mq -replace '\\','/')/data/
-log_dest file $($Logs -replace '\\','/')/mosquitto.log
+log_dest stdout
 "@
 Set-Content -Path "$Mq\mosquitto.conf" -Value $mqConf -Encoding ASCII
 $passwd = "$Mq\passwd"
@@ -341,9 +350,15 @@ function Install-SmartLabService($name, $exe, $params, $dir, [string[]]$deps) {
     $st = (Get-Service $name -ErrorAction SilentlyContinue).Status
     if ($st -ne "Running") {
         Write-Host "    $name không chạy được (trạng thái: $st). Nhật ký gần nhất:" -ForegroundColor Yellow
-        foreach ($log in @("$Logs\$name.log", "$Logs\mosquitto.log")) {
-            if (($name -ne "SmartLab-MQTT") -and ($log -like "*mosquitto.log")) { continue }
-            if (Test-Path $log) { Write-Host "    --- $log"; Get-Content $log -Tail 15 | ForEach-Object { Write-Host "    $_" } }
+        $log = "$Logs\$name.log"
+        if (Test-Path $log) {
+            Write-Host "    --- $log"
+            try {
+                $fs = [IO.File]::Open($log, "Open", "Read", "ReadWrite")
+                $lines = (New-Object IO.StreamReader($fs)).ReadToEnd() -split "`r?`n"
+                $fs.Close()
+                $lines | Select-Object -Last 15 | ForEach-Object { Write-Host "    $_" }
+            } catch { Write-Host "    (không đọc được: $($_.Exception.Message))" }
         }
         Fail "Dịch vụ $name không khởi động được. Chụp màn hình này gửi lại để xử lý."
     }
