@@ -256,6 +256,10 @@ Run "$MosqDir\mosquitto_passwd.exe" @("-c", "-b", $passwd, "smartlab", $mqttPw)
 Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "zigbee2mqtt", $z2mPw)
 Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "ro01", $ro1Pw)
 Run "$MosqDir\mosquitto_passwd.exe" @("-b", $passwd, "ro02", $ro2Pw)
+# mosquitto_passwd khóa file chỉ cho người tạo đọc -> dịch vụ (SYSTEM) bị chặn, thoát mã 13.
+# Cấp quyền đọc cho SYSTEM (*S-1-5-18) và Administrators (*S-1-5-32-544).
+icacls $passwd /grant "*S-1-5-18:R" "*S-1-5-32-544:R" | Out-Null
+icacls "$Mq\mosquitto.conf" /grant "*S-1-5-18:R" | Out-Null
 
 # ---------------------------------------------------------------- 5b. Cổng web
 # Cổng dashboard / Zigbee2MQTT đã bị chương trình khác dùng -> tự chọn cổng trống kế tiếp
