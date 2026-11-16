@@ -426,6 +426,14 @@ Install-SmartLabService "SmartLab-MQTT" "$MosqDir\mosquitto.exe" "-c `"$Mq\mosqu
 Install-SmartLabService "SmartLab-Zigbee2MQTT" $NodeExe "index.js" $Z2m @("SmartLab-MQTT")
 Install-SmartLabService "SmartLab-Worker" $VPy "-m smartlab.worker" $App @("SmartLab-MQTT", $MySqlService)
 Install-SmartLabService "SmartLab-Web" $VPy "-m uvicorn smartlab.web:app --host 0.0.0.0 --port $WebPort" $App @($MySqlService)
+# Cầu nối máy xét nghiệm (đọc CSDL LIS/Monitoring): chỉ cài khi đã có xn_bridge.ini
+$XnIni = "$App\xn_bridge.ini"
+if (Test-Path $XnIni) {
+    icacls $XnIni /inheritance:r /grant:r "*S-1-5-32-544:F" "*S-1-5-18:F" | Out-Null
+    Install-SmartLabService "SmartLab-XNBridge" $VPy "tools\xn_bridge.py" $App @("SmartLab-MQTT")
+} else {
+    Info "Chưa có $XnIni -> bỏ qua cầu nối máy xét nghiệm (xem tools\xn_bridge.example.ini)"
+}
 
 # ---------------------------------------------------------------- 8. Tường lửa, nguồn điện
 Step "Mở tường lửa cho mạng nội bộ ($WebPort dashboard, $Z2mPort Zigbee2MQTT, $MqttPort MQTT)"
