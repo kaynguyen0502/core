@@ -101,8 +101,11 @@ Ensure-Tool "nssm" "NSSM.NSSM"         "NSSM"
 $PyExe = $null
 $probeCode = "import sys;print(sys.executable)"
 if (Get-Command py -ErrorAction SilentlyContinue) {
-    $out = & py -3 -c $probeCode 2>$null
-    if ($LASTEXITCODE -eq 0 -and $out) { $PyExe = "$out".Trim() }
+    # Ưu tiên bản ổn định có đủ thư viện dựng sẵn; bản quá mới (3.14+) hay phải biên dịch C và lỗi
+    foreach ($v in @("-3.12", "-3.13", "-3.11", "-3")) {
+        $out = & py $v -c $probeCode 2>$null
+        if ($LASTEXITCODE -eq 0 -and $out) { $PyExe = "$out".Trim(); break }
+    }
 }
 if (-not $PyExe -and (Get-Command python -ErrorAction SilentlyContinue)) {
     $out = & python -c $probeCode 2>$null   # bản giả Microsoft Store không in ra gì
@@ -113,6 +116,11 @@ if (-not $PyExe) {
     $PyExe = "$(& py -3 -c $probeCode)".Trim()
 }
 Info "Python: $PyExe"
+$pyMinor = [int](& $PyExe -c "import sys;print(sys.version_info[1])")
+if ($pyMinor -ge 14) {
+    Info "Lưu ý: Python 3.$pyMinor mới quá, một số thư viện chưa có bản dựng sẵn. Nếu bước cài thư viện lỗi:"
+    Info "  cài Python 3.12 (python.org, tick 'Add python.exe to PATH') rồi chạy lại file này."
+}
 
 $nodeMajor = [int]((& node -v).TrimStart("v").Split(".")[0])
 if ($nodeMajor -gt 24) { Info "Lưu ý: Node.js $(& node -v) mới hơn bản Zigbee2MQTT hỗ trợ chính thức (22/24). Nếu Zigbee2MQTT lỗi, cài Node.js 24 LTS." }
@@ -196,6 +204,12 @@ Write-Utf8NoBom $EnvFile $envText
 icacls $EnvFile /inheritance:r /grant:r "*S-1-5-32-544:F" "*S-1-5-18:F" | Out-Null
 
 Step "Tạo môi trường Python và cài thư viện"
+# venv tạo bằng bản Python khác (vd 3.15 lần trước) -> tạo lại bằng bản đang chọn
+$venvCfg = "$InstallDir\venv\pyvenv.cfg"
+if ((Test-Path $venvCfg) -and -not (Select-String -Path $venvCfg -SimpleMatch (Split-Path $PyExe) -Quiet)) {
+    Info "Tạo lại môi trường Python (đổi sang $PyExe)"
+    Remove-Item -Recurse -Force "$InstallDir\venv"
+}
 if (-not (Test-Path "$InstallDir\venv\Scripts\python.exe")) { Run $PyExe @("-m", "venv", "$InstallDir\venv") }
 $VPy = "$InstallDir\venv\Scripts\python.exe"
 Run $VPy @("-m", "pip", "install", "--upgrade", "pip", "-q")
