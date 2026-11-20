@@ -36,6 +36,11 @@ function Fail($msg) { Write-Host "`nLỖI: $msg" -ForegroundColor Red; exit 1 }
 function Refresh-Path {
     $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" +
                 [Environment]::GetEnvironmentVariable("Path", "User")
+    # Máy Windows cũ: đã cài nhưng PATH chưa cập nhật -> tự thêm các thư mục cài mặc định nếu có
+    foreach ($d in @("$env:ProgramFiles\Git\cmd", "${env:ProgramFiles(x86)}\Git\cmd", "$env:ProgramFiles\nodejs",
+                     "$env:APPDATA\npm", "$env:ProgramFiles\mosquitto", "$env:SystemRoot\System32")) {
+        if ($d -and (Test-Path $d) -and (($env:Path -split ";") -notcontains $d)) { $env:Path += ";$d" }
+    }
 }
 function Write-Utf8NoBom($path, $text) {
     [IO.File]::WriteAllText($path, $text, (New-Object System.Text.UTF8Encoding $false))
@@ -80,6 +85,7 @@ Set-Content -Path $Marker -Value "Thư mục cài SmartLab platform (install_win
 # ---------------------------------------------------------------- 1. Công cụ
 Step "Kiểm tra / cài công cụ (Python, Node.js, Git, NSSM, Mosquitto)"
 function Ensure-Tool($cmd, $wingetId, $label) {
+    Refresh-Path
     if (Get-Command $cmd -ErrorAction SilentlyContinue) { Info "${label}: đã có"; return }
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) { Fail "Thiếu $label và máy không có winget. Cài $label thủ công rồi chạy lại." }
     Info "Đang cài $label ..."
