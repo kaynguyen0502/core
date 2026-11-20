@@ -284,7 +284,18 @@ $Z2mPort = Get-FreePort $Z2mPort "Zigbee2MQTT"
 # ---------------------------------------------------------------- 6. Zigbee2MQTT
 Step "Cài Zigbee2MQTT"
 if (-not (Test-Path "$Z2m\package.json")) {
-    Run "git" @("clone", "--depth", "1", "https://github.com/Koenkk/zigbee2mqtt.git", $Z2m)
+    if (Test-Path "$Z2m\data") {
+        # Đã chép sẵn zigbee2mqtt\data từ máy cũ (mạng Zigbee + cảm biến đã ghép): tải mã nguồn ra chỗ tạm rồi ghép vào
+        $tmp = "$InstallDir\z2m-src"
+        if (Test-Path $tmp) { Remove-Item -Recurse -Force $tmp }
+        Run "git" @("clone", "--depth", "1", "https://github.com/Koenkk/zigbee2mqtt.git", $tmp)
+        & robocopy $tmp $Z2m /E /XD "$tmp\data" /NFL /NDL /NJH /NJS /NP | Out-Null
+        if ($LASTEXITCODE -ge 8) { Fail "Không chép được mã nguồn Zigbee2MQTT vào $Z2m" }
+        Remove-Item -Recurse -Force $tmp
+        Info "Dùng cấu hình Zigbee chép từ máy cũ: $Z2m\data"
+    } else {
+        Run "git" @("clone", "--depth", "1", "https://github.com/Koenkk/zigbee2mqtt.git", $Z2m)
+    }
 }
 Push-Location $Z2m
 # Node.js 25+ không còn kèm corepack -> cài pnpm bằng npm
