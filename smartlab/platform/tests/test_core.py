@@ -239,3 +239,20 @@ def test_history_api_and_pages(session):
     assert page.status_code == 200 and "MT02" in page.text and "In sổ" in page.text
     assert c.get(f"/export/logbook.csv?month={month}").status_code == 200
     assert 'data-code' in c.get("/tv").text
+
+
+def test_reset_data_keeps_points(session):
+    from smartlab import db as dbmod
+    from smartlab.models import Point, Reading
+    from tools import reset_data
+    from sqlalchemy import func, select
+    with dbmod.SessionLocal() as s:
+        n_points = s.scalar(select(func.count()).select_from(Point))
+        p = s.scalars(select(Point)).first()
+        s.add(Reading(point_id=p.id, ts=datetime(2026, 11, 1), metric="temperature", value=5))
+        s.commit()
+    assert reset_data.main([]) == 1          # chưa --yes thì không xóa
+    assert reset_data.main(["--yes"]) == 0
+    with dbmod.SessionLocal() as s:
+        assert s.scalar(select(func.count()).select_from(Reading)) == 0
+        assert s.scalar(select(func.count()).select_from(Point)) == n_points
