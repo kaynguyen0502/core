@@ -378,8 +378,10 @@ advanced:
     # Mật khẩu MQTT phải khớp file passwd vừa tạo (cấu hình có thể chép từ lần cài khác)
     $yaml = [regex]::Replace($yaml, '(?ms)(^mqtt:.*?^\s+user:\s*)\S+', "`${1}zigbee2mqtt")
     $yaml = [regex]::Replace($yaml, '(?ms)(^mqtt:.*?^\s+password:\s*)\S+', "`${1}$z2mPw")
+    # Chuyển sang máy khác: cổng COM thường đổi số -> cập nhật theo USB vừa dò được
+    $yaml = [regex]::Replace($yaml, '(?ms)(^serial:.*?^\s+port:\s*)\S+', "`${1}$ZigbeePort")
     Write-Utf8NoBom $z2mConf $yaml
-    Info "Giữ nguyên $z2mConf, cập nhật cổng giao diện $Z2mPort và tài khoản MQTT."
+    Info "Giữ nguyên $z2mConf (mạng Zigbee, cảm biến đã ghép), cập nhật cổng $ZigbeePort, giao diện $Z2mPort, tài khoản MQTT."
 }
 
 # ---------------------------------------------------------------- 7. Dịch vụ Windows
