@@ -43,6 +43,7 @@ def run():
     init_db()
     with SessionLocal() as s:
         service.ensure_states(s)
+    notify.start_sender()
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="smartlab-worker")
     if config.MQTT_USER:
         client.username_pw_set(config.MQTT_USER, config.MQTT_PASSWORD)
@@ -57,7 +58,7 @@ def run():
     while True:
         try:
             with LOCK, SessionLocal() as s:
-                remind = settings.get(s, "zalo").get("remind_minutes") or config.REMIND_MINUTES
+                remind = settings.get(s, "zalo")["repeat_minutes"] or config.REMIND_MINUTES   # 0 = không nhắc qua Zalo
                 events = service.check_all(s, remind_minutes=int(remind), seen_floor=started)
                 if events:
                     notify.send_events(events)

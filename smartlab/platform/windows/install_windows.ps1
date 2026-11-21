@@ -503,4 +503,4 @@ Write-Host "`nViệc còn lại làm tay:" -ForegroundColor Yellow
 Write-Host " 1. BIOS: 'Restore on AC Power Loss' = Power On"
 Write-Host " 2. Windows Update: đặt Active hours / tạm dừng, cập nhật thủ công ngoài giờ"
 Write-Host " 3. Đặt IP tĩnh cho card mạng theo IP Phòng CNTT cấp"
-Write-Host " 4. Điền Zalo vào $EnvFile rồi chạy: nssm restart SmartLab-Worker"
+Write-Host " 4. Cấu hình Zalo và âm thanh: http://${ip}:$WebPort/cai-dat"

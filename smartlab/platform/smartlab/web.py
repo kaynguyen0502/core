@@ -20,7 +20,7 @@ from datetime import date, datetime, timedelta
 from . import alarms, config, notify, records, service, settings, tts
 from . import db as dbmod
 from .db import init_db
-from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState
+from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState, ZaloLog
 
 @asynccontextmanager
 async def lifespan(_app):
@@ -250,82 +250,90 @@ def settings_home(user=Depends(admin)):
 
 
 @app.get("/cai-dat/zalo", response_class=HTMLResponse)
-def zalo_page(request: Request, msg: str = "", user=Depends(admin), s=Depends(db)):
-    z = settings.get(s, "zalo")
-    return templates.TemplateResponse(request, "settings_zalo.html", {
-        **_nav(request, "zalo"), "z": z, "token_mask": settings.mask(z["token"]), "kinds": settings.KINDS,
-        "env_fallback": not z["token"] and bool(config.ZALO_SEND_URL), "msg": msg})
+def zalo_page(request: Request, user=Depends(admin)):
+    return templates.TemplateResponse(request, "settings_zalo.html", _nav(request, "zalo"))
 
 
-@app.post("/cai-dat/zalo")
-async def zalo_save(request: Request, user=Depends(admin), s=Depends(db)):
-    f = await request.form()
-    ids, names = f.getlist("rid"), f.getlist("rname")
-    on = set(f.getlist("ron"))
-    recipients = [{"id": i.strip(), "name": (n or "").strip(), "on": str(k) in on}
-                  for k, (i, n) in enumerate(zip(ids, names)) if i.strip()]
+def _zalo_public(z):
+    return {**z, "api_key": settings.mask(z["api_key"])}
+
+
+def _bad(msg, code=400):
+    return JSONResponse({"error": msg}, status_code=code)
+
+
+@app.get("/api/notify/settings")
+def notify_settings(user=Depends(admin), s=Depends(db)):
+    return _zalo_public(settings.get(s, "zalo"))
+
+
+@app.post("/api/notify/settings")
+async def notify_settings_save(request: Request, user=Depends(admin), s=Depends(db)):
     try:
-        remind = max(5, min(int(f.get("remind_minutes") or 30), 240))
-    except ValueError:
-        remind = 30
-    settings.put(s, "zalo", {
-        "token": (f.get("token") or "").strip(),
-        "recipients": recipients,
-        "kinds": {k: (k in f.getlist("kinds")) for k in settings.KINDS},
-        "prefix": (f.get("prefix") or "").strip()[:40],
-        "remind_minutes": remind,
-    }, user)
-    return RedirectResponse("/cai-dat/zalo?msg=Đã lưu", status_code=303)
-
-
-def _zalo_error(e):
-    return JSONResponse({"ok": False, "error": str(e)}, status_code=200)
-
-
-@app.post("/cai-dat/zalo/kiem-tra")
-def zalo_check(user=Depends(admin), s=Depends(db)):
-    z = settings.zalo_effective(s)
-    if not z["token"]:
-        return _zalo_error("Chưa có token")
+        b = await request.json()
+        assert isinstance(b, dict)
+    except Exception:  # noqa: BLE001
+        return _bad("Dữ liệu không hợp lệ")
+    recipients = []
+    for r in b.get("recipients") or []:
+        tid = str(r.get("thread_id") or "").strip()
+        if tid:
+            recipients.append({"thread_id": tid, "thread_type": "group" if r.get("thread_type") == "group" else "user",
+                               "name": str(r.get("name") or "").strip()[:80]})
     try:
-        me = notify.call(z["token"], "getMe")
-    except Exception as e:  # noqa: BLE001 - báo nguyên văn lỗi cho người cấu hình
-        return _zalo_error(e)
-    name = me.get("display_name") or me.get("account_name") or me.get("name") or str(me)
-    return {"ok": True, "bot": name}
+        repeat = max(0, min(int(b.get("repeat_minutes") or 0), 600))
+    except (TypeError, ValueError):
+        repeat = 30
+    new = {"enabled": bool(b.get("enabled")),
+           "base_url": str(b.get("base_url") or "").strip().rstrip("/"),
+           "api_key": str(b.get("api_key") or "").strip(),
+           "account_id": str(b.get("account_id") or "").strip(),
+           "account_name": str(b.get("account_name") or "").strip()[:80],
+           "dashboard_url": str(b.get("dashboard_url") or "").strip().rstrip("/"),
+           "recipients": recipients,
+           "on_alarm": bool(b.get("on_alarm")), "on_alarm_end": bool(b.get("on_alarm_end")),
+           "on_offline": bool(b.get("on_offline")), "repeat_minutes": repeat}
+    if new["enabled"]:
+        trial = {**settings.get(s, "zalo"), **{k: v for k, v in new.items() if k != "api_key" or (v and not v.startswith("•"))}}
+        if settings.zalo_ready(trial):
+            return _bad("Bật thông báo cần đủ: địa chỉ Zalo, API key, nick Zalo gửi và ít nhất 1 người nhận")
+    return _zalo_public(settings.put(s, "zalo", new, user))
 
 
-@app.post("/cai-dat/zalo/tim-chat")
-def zalo_find_chats(user=Depends(admin), s=Depends(db)):
-    """Đọc tin nhắn gần đây gửi tới bot để lấy chat ID (người nhắn riêng hoặc nhóm có bot)."""
-    z = settings.zalo_effective(s)
-    if not z["token"]:
-        return _zalo_error("Chưa có token")
+@app.post("/api/notify/test")
+async def notify_test(request: Request, user=Depends(admin), s=Depends(db)):
     try:
-        res = notify.call(z["token"], "getUpdates", {"timeout": 5}, timeout=20)
-    except Exception as e:  # noqa: BLE001
-        return _zalo_error(e)
-    items = res if isinstance(res, list) else [res]
-    found = {}
-    for it in items:
-        m = (it or {}).get("message") or {}
-        chat, frm = m.get("chat") or {}, m.get("from") or {}
-        if chat.get("id"):
-            kind = "Nhóm" if str(chat.get("chat_type", "")).upper() == "GROUP" else "Cá nhân"
-            found[str(chat["id"])] = {"id": str(chat["id"]), "type": kind,
-                                      "name": chat.get("display_name") or frm.get("display_name") or "",
-                                      "text": (m.get("text") or "")[:60]}
-    return {"ok": True, "chats": list(found.values())}
+        b = await request.json()
+    except Exception:  # noqa: BLE001
+        b = {}
+    r = (b or {}).get("recipient")
+    only = None
+    if isinstance(r, dict) and str(r.get("thread_id") or "").strip():
+        only = {"thread_id": str(r["thread_id"]).strip(), "name": str(r.get("name") or ""),
+                "thread_type": "group" if r.get("thread_type") == "group" else "user"}
+    try:
+        return {"results": notify.send_test(s, only)}
+    except RuntimeError as e:
+        return _bad(str(e))
 
 
-@app.post("/cai-dat/zalo/gui-thu")
-def zalo_test(user=Depends(admin), s=Depends(db)):
-    z = settings.zalo_effective(s)
-    if not z["token"] or not z["recipients"]:
-        return _zalo_error("Chưa có token hoặc chưa có người nhận")
-    now = records.to_local(service.utcnow()).strftime("%H:%M %d/%m/%Y")
-    res = notify.send_text(z, f"{z['prefix']} ✅ Tin thử từ SmartLab lúc {now}. Nhận được tin này là cấu hình Zalo đã đúng.")
-    return {"ok": all(e is None for _, e in res), "results": [{"name": n, "error": e} for n, e in res]}
+@app.post("/api/notify/lookup")
+async def notify_lookup(request: Request, user=Depends(admin)):
+    try:
+        b = await request.json()
+        return notify.lookup(b.get("base_url"), b.get("email"), b.get("password"), b.get("account_id") or "",
+                             b.get("search") or "", b.get("thread_type") or "")
+    except RuntimeError as e:
+        return _bad(str(e))
+    except Exception:  # noqa: BLE001
+        return _bad("Dữ liệu không hợp lệ")
+
+
+@app.get("/api/notify/logs")
+def notify_logs(user=Depends(admin), s=Depends(db)):
+    rows = s.scalars(select(ZaloLog).order_by(ZaloLog.id.desc()).limit(100)).all()
+    return {"logs": [{"at": local(r.ts).strftime("%d/%m/%Y %H:%M:%S"), "to": r.to, "text": r.text, "ok": r.ok,
+                      "error": r.error} for r in rows]}
 
 
 @app.get("/cai-dat/am-thanh", response_class=HTMLResponse)

@@ -264,9 +264,9 @@ AUTH = {"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode(
 
 def test_settings_secret_kept_and_audited(session):
     from smartlab import settings
-    settings.put(session, "zalo", {"token": "abc123456", "prefix": "[HS]"}, "admin")
-    z = settings.put(session, "zalo", {"token": "  ", "prefix": "[HS2]"}, "admin")   # để trống = giữ token
-    assert z["token"] == "abc123456" and z["prefix"] == "[HS2]" and z["kinds"]["alarm"] is True
+    settings.put(session, "zalo", {"api_key": "abc123456", "account_id": "A1"}, "admin")
+    z = settings.put(session, "zalo", {"api_key": "••••3456", "account_id": "A2"}, "admin")   # ô còn che = giữ key
+    assert z["api_key"] == "abc123456" and z["account_id"] == "A2" and z["on_alarm"] is True
     logs = session.scalars(select_audit()).all()
     assert logs and all("abc123456" not in a.detail for a in logs)
     assert settings.mask("abc123456") == "••••••" and settings.mask("x" * 20 + "WXYZ").endswith("WXYZ")
@@ -277,20 +277,36 @@ def select_audit():
     return select(AuditLog).where(AuditLog.action.like("cấu hình%"))
 
 
-def test_zalo_send_respects_kinds(session, monkeypatch):
+class _Resp:
+    def __init__(self, code=200, data=None):
+        self.status_code, self._d, self.text = code, data or {}, ""
+
+    def json(self):
+        return self._d
+
+
+def test_zalo_send_respects_switches_and_logs(session, monkeypatch):
     from smartlab import notify, settings
+    from smartlab.models import ZaloLog
     sent = []
-    monkeypatch.setattr(notify, "call", lambda token, method, payload=None, timeout=15: sent.append((token, payload)) or {})
-    settings.put(session, "zalo", {"token": "T", "recipients": [{"id": "g1", "name": "Nhóm", "on": True},
-                                                                 {"id": "u2", "name": "Tắt", "on": False}],
-                                   "kinds": {"normal": False}})
+    monkeypatch.setattr(notify.httpx, "post", lambda url, json=None, headers=None, timeout=None:
+                        sent.append((url, json, headers)) or _Resp())
+    settings.put(session, "zalo", {"enabled": True, "base_url": "http://z:3000", "api_key": "K", "account_id": "ACC",
+                                   "recipients": [{"thread_id": "g1", "thread_type": "group", "name": "trực khoa"}],
+                                   "on_alarm_end": False, "dashboard_url": "http://hs:8100"})
     p = session.query(Point).first()
-    ev_alarm = AlarmEvent(point_id=p.id, ts=T0, kind="alarm", message="SH19-M nóng", notified=False)
-    ev_norm = AlarmEvent(point_id=p.id, ts=T0, kind="normal", message="SH19-M bình thường", notified=False)
-    session.add_all([ev_alarm, ev_norm]); session.flush()
+    ev_alarm = AlarmEvent(point_id=p.id, ts=T0, kind="alarm", message="VƯỢT NGƯỠNG SH19-M", notified=False)
+    ev_norm = AlarmEvent(point_id=p.id, ts=T0, kind="normal", message="ĐÃ BÌNH THƯỜNG SH19-M", notified=False)
+    session.add_all([ev_alarm, ev_norm]); session.commit()      # worker cũng commit trước khi luồng gửi ghi nhật ký
     notify.send_events([ev_alarm, ev_norm])
-    assert sent == [("T", {"chat_id": "g1", "text": "[SmartLab HS] 🔴 SH19-M nóng"})]
-    assert ev_alarm.notified and ev_norm.notified
+    assert len(sent) == 1
+    url, body, headers = sent[0]
+    assert url == "http://z:3000/api/public/messages/send" and headers == {"X-Api-Key": "K"}
+    assert body == {"zaloAccountId": "ACC", "threadId": "g1", "threadType": "group",
+                    "content": "🔴 VƯỢT NGƯỠNG SH19-M\nLúc: 14:00 08/11/2026\nXem: http://hs:8100/tv"}
+    assert ev_alarm.notified and not ev_norm.notified
+    log = session.query(ZaloLog).one()
+    assert log.ok and log.to == "Nhóm trực khoa"
 
 
 def test_settings_pages_sound_api_and_tts_cache(session, tmp_path, monkeypatch):
@@ -299,13 +315,17 @@ def test_settings_pages_sound_api_and_tts_cache(session, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "AUDIO_DIR", str(tmp_path))
     c = TestClient(web.app)
     assert c.get("/cai-dat/zalo").status_code == 401
-    assert "Zalo Bot" in c.get("/cai-dat/zalo", headers=AUTH).text
-    r = c.post("/cai-dat/zalo", headers=AUTH, data={"token": "TK", "rid": ["g1", ""], "rname": ["Nhóm khoa", ""],
-                                                     "ron": ["0"], "kinds": ["alarm", "offline"], "remind_minutes": "45",
-                                                     "prefix": "[HS]"}, follow_redirects=False)
-    assert r.status_code == 303
-    page = c.get("/cai-dat/zalo", headers=AUTH).text
-    assert "Nhóm khoa" in page and "TK" not in page.replace("TKB", "")
+    assert "Tìm nick Zalo" in c.get("/cai-dat/zalo", headers=AUTH).text
+    assert "CRM" not in c.get("/cai-dat/zalo", headers=AUTH).text
+    bad = c.post("/api/notify/settings", headers=AUTH, json={"enabled": True})
+    assert bad.status_code == 400 and "cần đủ" in bad.json()["error"]
+    d = c.post("/api/notify/settings", headers=AUTH, json={
+        "enabled": True, "base_url": "http://z:3000/", "api_key": "SECRETKEY12345", "account_id": "ACC",
+        "recipients": [{"thread_id": "g1", "thread_type": "group", "name": "Nhóm khoa"}, {"thread_id": " "}],
+        "on_alarm": True, "repeat_minutes": 15}).json()
+    assert d["api_key"] == "••••••2345" and d["base_url"] == "http://z:3000" and len(d["recipients"]) == 1
+    assert c.get("/api/notify/settings", headers=AUTH).json()["repeat_minutes"] == 15
+    assert c.get("/api/notify/logs", headers=AUTH).json() == {"logs": []}
     r = c.post("/cai-dat/am-thanh", headers=AUTH, data={"voice": "fpt", "fpt_key": "KEY9", "fpt_voice": "giahuy",
                                                          "chime": "1", "volume": "80", "repeat_minutes": "3",
                                                          "mute_minutes": "20", "alarm_text": "Cảnh báo {ten}",

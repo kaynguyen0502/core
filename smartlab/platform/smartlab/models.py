@@ -7,6 +7,7 @@ AlarmEvent  : nhật ký cảnh báo (vượt ngưỡng, mất tín hiệu, tr�
 AuditLog    : ai sửa danh mục, sửa gì, lúc nào (phục vụ ISO 15189)
 LogEntry    : sổ theo dõi ISO 15189 – giá trị mỗi điểm tại các mốc ghi sổ (mặc định 07:00, 13:00)
 Setting     : cấu hình sửa trên web (Zalo, âm thanh / giọng đọc) – khóa -> JSON
+ZaloLog     : tin Zalo đã gửi (kết quả từng người nhận)
 """
 from datetime import datetime
 
@@ -113,3 +114,14 @@ class Setting(Base):
     __tablename__ = "settings"
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ZaloLog(Base):
+    """Tin Zalo đã gửi: tới ai, nội dung, thành công hay lỗi."""
+    __tablename__ = "zalo_log"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    ts: Mapped[datetime] = mapped_column(DateTime)
+    to: Mapped[str] = mapped_column(String(120))
+    text: Mapped[str] = mapped_column(Text)
+    ok: Mapped[bool] = mapped_column(Boolean, default=False)
+    error: Mapped[str] = mapped_column(String(255), default="")

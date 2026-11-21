@@ -1,92 +1,164 @@
 {% extends "settings_layout.html" %}
 {% block title %}Thông báo Zalo{% endblock %}
-{% block heading %}Thông báo qua Zalo{% endblock %}
+{% block heading %}Thông báo Zalo{% endblock %}
 {% block body %}
-<form method="post" action="/cai-dat/zalo" class="card" id="f">
-  <h2>1. Zalo Bot</h2>
-  <p class="hint">Tạo bot trong ứng dụng Zalo: tìm OA <b>"Zalo Bot Manager"</b> → Tạo bot → nhận <b>token</b>. Dán token vào đây.</p>
-  {% if env_fallback %}<p class="hint">Đang dùng token cũ trong file <code>.env</code>. Nhập token ở đây để quản lý trên web.</p>{% endif %}
+<div class="card">
+  <p class="hint">Gửi tin Zalo khi điểm đo vượt ngưỡng, trở lại bình thường hoặc mất tín hiệu. Tin được gửi từ một nick Zalo đang kết nối tới từng người hoặc nhóm Zalo.
+    Lấy API key trong trang quản lý Zalo: <b>Cài đặt → API &amp; Webhook</b>.</p>
+  <label class="inline"><input type="checkbox" id="nEnabled"> <b>Bật thông báo Zalo</b></label>
   <div class="row">
-    <label>Token bot
-      <input type="password" name="token" autocomplete="off" placeholder="{{ ('Đã lưu ' ~ token_mask ~ ' – để trống nếu không đổi') if token_mask else 'Dán token bot' }}">
-    </label>
-    <div style="flex:0 0 auto"><button type="button" class="sec" id="check">Kiểm tra bot</button></div>
+    <label>Địa chỉ máy chủ Zalo<input type="text" id="nBase" placeholder="https://zalo.ten-mien.vn hoặc http://192.168.1.20:3000"></label>
+    <label>API key<input type="password" id="nKey" placeholder="dán API key của Zalo" autocomplete="off"></label>
   </div>
-  <div class="out" id="checkOut"></div>
-
-  <h2>2. Người / nhóm nhận tin</h2>
-  <p class="hint">Mỗi người cần <b>nhắn 1 tin bất kỳ cho bot</b> (hoặc thêm bot vào nhóm Zalo của khoa rồi nhắn 1 tin trong nhóm), sau đó bấm <b>Tìm chat ID</b>.</p>
-  <table>
-    <thead><tr><th style="width:70px">Nhận tin</th><th>Tên gợi nhớ</th><th>Chat ID</th><th style="width:60px"></th></tr></thead>
-    <tbody id="rows">
-    {% for r in z.recipients %}
-      <tr><td><input type="checkbox" name="ron" value="{{ loop.index0 }}" {{ 'checked' if r.on }} aria-label="Nhận tin"></td>
-        <td><input type="text" name="rname" value="{{ r.name }}" aria-label="Tên"></td>
-        <td><input type="text" name="rid" value="{{ r.id }}" aria-label="Chat ID"></td>
-        <td><button type="button" class="del" onclick="this.closest('tr').remove();renumber()" aria-label="Xóa">Xóa</button></td></tr>
-    {% endfor %}
-    </tbody>
-  </table>
-  <div class="row" style="flex-wrap:wrap">
-    <div style="flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap">
-      <button type="button" class="sec" id="find">Tìm chat ID</button>
-      <button type="button" class="sec" id="add">Thêm dòng trống</button>
-    </div>
-  </div>
-  <div class="out" id="findOut"></div>
-
-  <h2>3. Loại tin gửi</h2>
-  {% for k, label in kinds.items() %}
-    <label class="inline"><input type="checkbox" name="kinds" value="{{ k }}" {{ 'checked' if z.kinds.get(k, true) }}> {{ label }}</label>
-  {% endfor %}
   <div class="row">
-    <label>Nhắc lại khi vẫn vượt ngưỡng sau (phút)<input type="number" name="remind_minutes" min="5" max="240" value="{{ z.remind_minutes }}"></label>
-    <label>Đầu dòng tin nhắn<input type="text" name="prefix" maxlength="40" value="{{ z.prefix }}"></label>
+    <label>ID nick Zalo gửi tin<input type="text" id="nAcc" placeholder="dùng phần Tìm bên dưới"></label>
+    <label>Tên nick (để nhớ)<input type="text" id="nAccName" placeholder="vd: Zalo Khoa Hóa Sinh"></label>
   </div>
-  <div style="display:flex;gap:8px;flex-wrap:wrap">
-    <button type="submit">Lưu cấu hình</button>
-    <button type="button" class="sec" id="test">Gửi tin thử</button>
+  <label>Link dashboard gắn vào tin (tuỳ chọn)<input type="text" id="nDash" placeholder="vd http://192.168.103.151:8100"></label>
+
+  <h2>Người nhận</h2>
+  <table><thead><tr><th>Tên</th><th style="width:120px">Loại</th><th>Thread ID</th><th style="width:150px"></th></tr></thead><tbody id="nRcp"></tbody></table>
+  <div><button type="button" class="sec" id="nAddRow">+ Thêm người nhận</button></div>
+
+  <h2>Khi nào gửi</h2>
+  <label class="inline"><input type="checkbox" id="nOnAlarm"> Vượt ngưỡng (sau thời gian chờ của từng điểm đo)</label>
+  <label class="inline"><input type="checkbox" id="nOnAlarmEnd"> Trở lại bình thường</label>
+  <label class="inline"><input type="checkbox" id="nOnOffline"> Mất tín hiệu (và khi có tín hiệu lại)</label>
+  <label class="inline">Nhắc lại khi vẫn vượt ngưỡng, mỗi <input type="number" id="nRepeat" min="0" max="600" style="width:80px"> phút (0 = không nhắc)</label>
+  <p class="hint">Thời gian chờ trước khi báo vượt ngưỡng / mất tín hiệu đặt riêng cho từng điểm ở <a href="/catalog">Danh mục điểm đo</a>.</p>
+
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button type="button" id="nSave">Lưu cài đặt</button>
+    <button type="button" class="sec" id="nTest">Gửi tin thử cho tất cả người nhận</button>
+    <span id="nMsg" class="hint" role="status"></span>
   </div>
-  <div class="out" id="testOut"></div>
-  <p class="hint">Lưu xong có hiệu lực ngay, không cần khởi động lại. Gửi thử dùng cấu hình <b>đã lưu</b>.</p>
-</form>
+</div>
+
+<div class="card">
+  <h2>Tìm nick Zalo và người nhận</h2>
+  <p class="hint">Đăng nhập Zalo một lần để lấy danh sách. Mật khẩu chỉ dùng cho lần tìm này, không được lưu.</p>
+  <div class="row">
+    <label>Email / SĐT đăng nhập Zalo<input type="text" id="lEmail" autocomplete="off"></label>
+    <label>Mật khẩu Zalo<input type="password" id="lPass" autocomplete="new-password"></label>
+  </div>
+  <div class="row">
+    <label>Tìm theo tên (tuỳ chọn)<input type="text" id="lSearch" placeholder="vd: Nhóm trực khoa"></label>
+    <label>Loại<select id="lType"><option value="">Tất cả</option><option value="group">Nhóm</option><option value="user">Cá nhân</option></select></label>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button type="button" class="sec" id="lRun">Tìm</button><span id="lMsg" class="hint" role="status"></span></div>
+  <div id="lAcc"></div>
+  <div id="lThr"></div>
+</div>
+
+<div class="card">
+  <h2>Tin đã gửi gần đây</h2>
+  <table><thead><tr><th style="width:150px">Thời gian</th><th>Tới</th><th>Kết quả</th><th>Nội dung</th></tr></thead><tbody id="nLogs"></tbody></table>
+</div>
 {% endblock %}
 {% block script %}
+<style>
+.pick{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}.pick button{font-size:14px}
+td.msg{white-space:pre-wrap;font-size:13px;color:var(--mute);max-width:420px}
+</style>
 <script>
-function renumber() {
-  document.querySelectorAll("#rows tr").forEach((tr, i) => { const c = tr.querySelector("input[name=ron]"); if (c) c.value = i; });
+const $ = s => document.querySelector(s);
+let nRecipients = [], lookupData = null;
+async function postJSON(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ("Lỗi " + r.status));
+  return d;
 }
-function addRow(id = "", name = "") {
-  const tr = document.createElement("tr");
-  tr.innerHTML = `<td><input type="checkbox" name="ron" checked aria-label="Nhận tin"></td>
-    <td><input type="text" name="rname" value="${esc(name)}" aria-label="Tên"></td>
-    <td><input type="text" name="rid" value="${esc(id)}" aria-label="Chat ID"></td>
-    <td><button type="button" class="del" onclick="this.closest('tr').remove();renumber()" aria-label="Xóa">Xóa</button></td>`;
-  document.getElementById("rows").appendChild(tr); renumber();
+function msg(el, text, cls) { $(el).className = cls || "hint"; $(el).textContent = text; }
+function renderRcp() {
+  $("#nRcp").innerHTML = nRecipients.map((r, i) => `<tr>
+    <td><input type="text" data-i="${i}" data-k="name" value="${esc(r.name)}" placeholder="vd: Nhóm trực khoa" aria-label="Tên"></td>
+    <td><select data-i="${i}" data-k="thread_type" aria-label="Loại"><option value="group" ${r.thread_type === "group" ? "selected" : ""}>Nhóm</option><option value="user" ${r.thread_type !== "group" ? "selected" : ""}>Cá nhân</option></select></td>
+    <td><input type="text" data-i="${i}" data-k="thread_id" value="${esc(r.thread_id)}" placeholder="threadId" aria-label="Thread ID"></td>
+    <td style="white-space:nowrap"><button type="button" class="sec" data-test="${i}">Thử</button> <button type="button" class="del" data-del="${i}">Xoá</button></td></tr>`).join("")
+    || `<tr><td colspan="4" class="hint">Chưa có người nhận. Dùng phần "Tìm" bên dưới hoặc bấm "+ Thêm người nhận".</td></tr>`;
 }
-document.getElementById("add").onclick = () => addRow();
-document.getElementById("check").onclick = async () => {
-  const d = await post("/cai-dat/zalo/kiem-tra");
-  show("checkOut", d.ok ? `Kết nối được bot: <b>${esc(d.bot)}</b>` : `Lỗi: ${esc(d.error)}. Nếu vừa dán token mới, bấm Lưu trước.`, d.ok);
-};
-document.getElementById("find").onclick = async () => {
-  show("findOut", "Đang đọc tin nhắn gửi tới bot…", true);
-  const d = await post("/cai-dat/zalo/tim-chat");
-  if (!d.ok) return show("findOut", `Lỗi: ${esc(d.error)}`, false);
-  if (!d.chats.length) return show("findOut", "Chưa thấy tin nhắn mới. Nhắn 1 tin cho bot (hoặc trong nhóm có bot) rồi bấm lại.", false);
-  const have = new Set([...document.querySelectorAll("input[name=rid]")].map(i => i.value));
-  show("findOut", d.chats.map(c => `${esc(c.type)} · <b>${esc(c.name || "(không tên)")}</b> · ${esc(c.id)} · “${esc(c.text)}” ` +
-    (have.has(c.id) ? "(đã có)" : `<button type="button" class="sec" data-id="${esc(c.id)}" data-name="${esc(c.name)}">Thêm</button>`)).join("<br>"), true);
-};
-document.getElementById("findOut").addEventListener("click", e => {
-  const b = e.target.closest("button[data-id]");
-  if (b) { addRow(b.dataset.id, b.dataset.name); b.replaceWith("(đã thêm – nhớ bấm Lưu)"); }
+$("#nRcp").addEventListener("input", e => { const t = e.target; if (t.dataset.i !== undefined) nRecipients[t.dataset.i][t.dataset.k] = t.value; });
+$("#nRcp").addEventListener("click", async e => {
+  const b = e.target.closest("button"); if (!b) return;
+  if (b.dataset.del !== undefined) { nRecipients.splice(Number(b.dataset.del), 1); renderRcp(); }
+  if (b.dataset.test !== undefined) {
+    const r = nRecipients[Number(b.dataset.test)];
+    b.disabled = true; b.textContent = "Đang gửi...";
+    try { const d = await postJSON("/api/notify/test", {recipient: r}); const x = d.results[0]; alert(x.ok ? "Đã gửi tới " + x.to : "Lỗi: " + x.error); }
+    catch (err) { alert(err.message); }
+    b.disabled = false; b.textContent = "Thử"; loadLogs();
+  }
 });
-document.getElementById("test").onclick = async () => {
-  show("testOut", "Đang gửi…", true);
-  const d = await post("/cai-dat/zalo/gui-thu");
-  if (d.error) return show("testOut", `Lỗi: ${esc(d.error)}`, false);
-  show("testOut", d.results.map(r => `${esc(r.name)}: ${r.error ? "LỖI – " + esc(r.error) : "đã gửi"}`).join("<br>"), d.ok);
+$("#nAddRow").onclick = () => { nRecipients.push({name: "", thread_type: "group", thread_id: ""}); renderRcp(); };
+function fill(s) {
+  $("#nEnabled").checked = !!s.enabled; $("#nBase").value = s.base_url || ""; $("#nKey").value = s.api_key || "";
+  $("#nAcc").value = s.account_id || ""; $("#nAccName").value = s.account_name || ""; $("#nDash").value = s.dashboard_url || "";
+  $("#nOnAlarm").checked = !!s.on_alarm; $("#nOnAlarmEnd").checked = !!s.on_alarm_end; $("#nOnOffline").checked = !!s.on_offline;
+  $("#nRepeat").value = s.repeat_minutes ?? 30;
+  nRecipients = (s.recipients || []).map(r => ({...r})); renderRcp();
+  if (!$("#nDash").value) $("#nDash").placeholder = location.origin;
+}
+async function load() {
+  try { fill(await (await fetch("/api/notify/settings", {cache: "no-store"})).json()); } catch (e) { msg("#nMsg", "Không tải được cài đặt", "bad"); }
+  loadLogs();
+}
+function collect() {
+  return {enabled: $("#nEnabled").checked, base_url: $("#nBase").value, api_key: $("#nKey").value,
+    account_id: $("#nAcc").value, account_name: $("#nAccName").value, dashboard_url: $("#nDash").value,
+    recipients: nRecipients, on_alarm: $("#nOnAlarm").checked, on_alarm_end: $("#nOnAlarmEnd").checked,
+    on_offline: $("#nOnOffline").checked, repeat_minutes: Number($("#nRepeat").value) || 0};
+}
+$("#nSave").onclick = async () => {
+  msg("#nMsg", "Đang lưu...");
+  try { fill(await postJSON("/api/notify/settings", collect())); msg("#nMsg", "Đã lưu.", "ok"); }
+  catch (e) { msg("#nMsg", e.message, "bad"); }
 };
+$("#nTest").onclick = async () => {
+  msg("#nMsg", "Đang gửi tin thử (dùng cài đặt đã lưu)...");
+  try {
+    const d = await postJSON("/api/notify/test", {});
+    const bad = d.results.filter(x => !x.ok);
+    msg("#nMsg", bad.length ? "Lỗi: " + bad.map(x => x.to + ": " + x.error).join("; ") : "Đã gửi tới " + d.results.length + " người nhận.", bad.length ? "bad" : "ok");
+  } catch (e) { msg("#nMsg", e.message, "bad"); }
+  loadLogs();
+};
+async function loadLogs() {
+  try {
+    const d = await (await fetch("/api/notify/logs", {cache: "no-store"})).json();
+    $("#nLogs").innerHTML = (d.logs || []).map(l => `<tr><td style="white-space:nowrap">${esc(l.at)}</td><td>${esc(l.to)}</td>
+      <td class="${l.ok ? "ok" : "bad"}">${l.ok ? "Đã gửi" : "Lỗi: " + esc(l.error)}</td><td class="msg">${esc(l.text)}</td></tr>`).join("")
+      || `<tr><td colspan="4" class="hint">Chưa gửi tin nào.</td></tr>`;
+  } catch (e) {}
+}
+$("#lRun").onclick = async () => {
+  msg("#lMsg", "Đang đăng nhập Zalo...");
+  try {
+    lookupData = await postJSON("/api/notify/lookup", {base_url: $("#nBase").value, email: $("#lEmail").value, password: $("#lPass").value,
+      account_id: $("#nAcc").value, search: $("#lSearch").value, thread_type: $("#lType").value});
+    $("#lPass").value = "";
+    msg("#lMsg", `Tìm thấy ${lookupData.accounts?.length || 0} nick, ${lookupData.threads?.length || 0} hội thoại.`, "ok");
+    $("#lAcc").innerHTML = `<h2>Nick Zalo (bấm để chọn làm nick gửi)</h2><div class="pick">` + (lookupData.accounts || []).map((a, i) =>
+      `<button type="button" class="sec" data-acc="${i}">${esc(a.displayName || a.id)} ${a.phone ? "· " + esc(a.phone) : ""} · ${a.status === "connected" ? "đang kết nối" : esc(a.status || "")}</button>`).join("") + `</div>`;
+    $("#lThr").innerHTML = `<h2>Hội thoại ${$("#nAcc").value ? "của nick đã chọn" : ""} (bấm để thêm vào người nhận)</h2><div class="pick">` + (lookupData.threads || []).map((t, i) =>
+      `<button type="button" class="sec" data-thr="${i}">${t.threadType === "group" ? "👥 " : "👤 "}${esc(t.name || t.threadId)}</button>`).join("") + `</div>`;
+  } catch (e) { msg("#lMsg", e.message, "bad"); }
+};
+$("#lAcc").addEventListener("click", e => {
+  const b = e.target.closest("[data-acc]"); if (!b) return;
+  const a = lookupData.accounts[Number(b.dataset.acc)];
+  $("#nAcc").value = a.id; $("#nAccName").value = a.displayName || "";
+  msg("#lMsg", "Đã chọn nick. Nhập lại mật khẩu và bấm Tìm để xem hội thoại của nick này, rồi Lưu cài đặt.", "ok");
+});
+$("#lThr").addEventListener("click", e => {
+  const b = e.target.closest("[data-thr]"); if (!b) return;
+  const t = lookupData.threads[Number(b.dataset.thr)];
+  if (!t.threadId) { alert("Hội thoại này không có threadId"); return; }
+  if (nRecipients.some(r => r.thread_id === String(t.threadId))) return;
+  nRecipients.push({name: t.name || "", thread_type: t.threadType === "group" ? "group" : "user", thread_id: String(t.threadId)}); renderRcp();
+  if (!$("#nAcc").value && t.zaloAccountId) $("#nAcc").value = t.zaloAccountId;
+  msg("#lMsg", "Đã thêm " + (t.name || t.threadId) + ". Nhớ bấm Lưu cài đặt.", "ok");
+});
+load();
 </script>
 {% endblock %}
