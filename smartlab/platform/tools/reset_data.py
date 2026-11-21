@@ -32,7 +32,8 @@ def main(argv=None):
         if not a.yes:
             print("Chưa xóa gì. Thêm --yes để xóa thật.")
             return 1
-        url = config.DATABASE_URL
+        bind = db.SessionLocal.kw.get("bind")
+        url = str(bind.url) if bind is not None else config.DATABASE_URL
         if url.startswith("sqlite:///"):
             path = url[len("sqlite:///"):]
             if os.path.isfile(path):
