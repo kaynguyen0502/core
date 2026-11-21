@@ -1,0 +1,88 @@
+{% extends "settings_layout.html" %}
+{% block title %}Âm thanh & giọng đọc{% endblock %}
+{% block heading %}Âm thanh &amp; giọng đọc cảnh báo{% endblock %}
+{% block body %}
+<form method="post" action="/cai-dat/am-thanh" class="card">
+  <h2>1. Chuông báo trên màn hình dashboard (tivi)</h2>
+  <label class="inline"><input type="checkbox" name="default_on" value="1" {{ 'checked' if c.default_on }}>
+    Mọi màn hình dashboard tự hỏi bật âm thanh khi mở (không cần thêm <code>?sound=1</code> vào địa chỉ)</label>
+  <div class="row">
+    <label>Chuông khi vượt ngưỡng
+      <select name="chime">
+        <option value="3" {{ 'selected' if c.chime == '3' }}>3 hồi (mặc định)</option>
+        <option value="1" {{ 'selected' if c.chime == '1' }}>1 hồi</option>
+        <option value="0" {{ 'selected' if c.chime == '0' }}>Không chuông, chỉ giọng đọc</option>
+      </select></label>
+    <label>Âm lượng chuông (%)<input type="number" name="volume" min="5" max="100" value="{{ c.volume }}"></label>
+  </div>
+  <div class="row">
+    <label>Nhắc lại khi vẫn vượt ngưỡng sau (phút)<input type="number" name="repeat_minutes" min="1" max="60" value="{{ c.repeat_minutes }}"></label>
+    <label>Nút "Tạm tắt tiếng" tắt trong (phút)<input type="number" name="mute_minutes" min="5" max="240" value="{{ c.mute_minutes }}"></label>
+  </div>
+  <label class="inline"><input type="checkbox" name="offline_chime" value="1" {{ 'checked' if c.offline_chime }}> Kêu 1 tiếng khi một điểm đo mất tín hiệu</label>
+
+  <h2>2. Giọng đọc tiếng Việt</h2>
+  <label class="inline"><input type="radio" name="voice" value="off" {{ 'checked' if c.voice == 'off' }}> Tắt – chỉ phát chuông</label>
+  <label class="inline"><input type="radio" name="voice" value="browser" {{ 'checked' if c.voice == 'browser' }}> Giọng có sẵn của trình duyệt (tivi Samsung thường KHÔNG có giọng tiếng Việt)</label>
+  <label class="inline"><input type="radio" name="voice" value="fpt" {{ 'checked' if c.voice == 'fpt' }}> Giọng FPT.AI – tạo sẵn file mp3 trên máy chủ, tivi nào cũng phát được (khuyên dùng)</label>
+  <div class="row">
+    <label>API key FPT.AI
+      <input type="password" name="fpt_key" autocomplete="off" placeholder="{{ ('Đã lưu ' ~ key_mask ~ ' – để trống nếu không đổi') if key_mask else 'Lấy tại console.fpt.ai → Text to Speech' }}"></label>
+    <label>Giọng
+      <select name="fpt_voice">{% for k, v in voices.items() %}<option value="{{ k }}" {{ 'selected' if c.fpt_voice == k }}>{{ v }}</option>{% endfor %}</select></label>
+    <label>Tốc độ đọc
+      <select name="speed">{% for v, t in [(-2,'Chậm'),(-1,'Hơi chậm'),(0,'Bình thường'),(1,'Hơi nhanh'),(2,'Nhanh')] %}<option value="{{ v }}" {{ 'selected' if c.speed == v }}>{{ t }}</option>{% endfor %}</select></label>
+  </div>
+  <label>Câu đọc khi vượt ngưỡng <span class="hint">({ten} = tên điểm đo, {ma} = mã điểm)</span>
+    <input type="text" name="alarm_text" maxlength="200" value="{{ c.alarm_text }}"></label>
+  <label>Câu đọc khi mất tín hiệu <span class="hint">(để trống = không đọc)</span>
+    <input type="text" name="offline_text" maxlength="200" value="{{ c.offline_text }}"></label>
+  {% if dups %}<p class="hint bad">Các điểm sau có câu đọc giống hệt nhau, nghe sẽ không biết tủ nào:
+    {% for g in dups %}<b>{{ g|join(", ") }}</b>{{ "; " if not loop.last }}{% endfor %}.
+    Đặt tên khác nhau ở <a href="/catalog">Danh mục điểm đo</a> (vd "Alaska lưu mẫu 1 – ngăn mát") hoặc thêm {ma} vào câu đọc.</p>{% endif %}
+  {% if sample_text %}<p class="hint">Ví dụ với {{ sample_code }}: “{{ sample_text }}”</p>{% endif %}
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button type="submit">Lưu cấu hình</button>
+    <button type="button" class="sec" id="build">Tạo file giọng đọc FPT.AI ({{ ready }}/{{ total }} đã có)</button>
+    <button type="button" class="sec" id="listen">Nghe thử trên máy này</button>
+  </div>
+  <div class="out" id="out"></div>
+  <p class="hint">Sau khi đổi giọng, tốc độ, câu đọc hoặc đổi tên điểm đo: bấm <b>Lưu</b> rồi <b>Tạo file giọng đọc</b> (cần Internet, khoảng 1–2 phút).
+    Các màn hình dashboard tự nhận cấu hình mới trong vòng 1 phút.</p>
+</form>
+{% endblock %}
+{% block script %}
+<script>
+document.getElementById("build").onclick = async () => {
+  show("out", "Đang tạo file giọng đọc, chờ 1–2 phút…", true);
+  const d = await post("/cai-dat/am-thanh/tao-giong");
+  show("out", `Tạo mới ${d.made} file, đã có ${d.have} file.` + (d.errors.length ? "<br>Lỗi: " + d.errors.map(esc).join("<br>") : ""), d.ok);
+};
+document.getElementById("listen").onclick = async () => {
+  const c = await (await fetch("/api/sound", {cache: "no-store"})).json();
+  const AC = window.AudioContext || window.webkitAudioContext, ctx = new AC();
+  let t = ctx.currentTime + 0.05;
+  const vol = c.volume / 100, n = {"3": 3, "1": 1, "0": 0}[c.chime];
+  for (let i = 0; i < n; i++) {
+    for (const f of [988, 740, 988, 740]) {
+      const o = ctx.createOscillator(), g = ctx.createGain(); o.type = "square"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol * 0.6, t + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.22);
+      o.connect(g).connect(ctx.destination); o.start(t); o.stop(t + 0.25); t += 0.22;
+    }
+    t += 0.12;
+  }
+  const wait = (t - ctx.currentTime + 0.3) * 1000;
+  const first = Object.values(c.clips)[0];
+  setTimeout(() => {
+    if (c.voice === "fpt") {
+      if (first && first.alarm) new Audio(first.alarm).play();
+      else show("out", "Chưa có file giọng đọc: bấm Lưu rồi Tạo file giọng đọc.", false);
+    } else if (c.voice === "browser" && window.speechSynthesis) {
+      const v = speechSynthesis.getVoices().find(x => /^vi/i.test(x.lang));
+      if (!v) return show("out", "Trình duyệt máy này không có giọng tiếng Việt.", false);
+      const u = new SpeechSynthesisUtterance({{ sample_text|tojson }}); u.voice = v; u.lang = v.lang; speechSynthesis.speak(u);
+    }
+  }, wait);
+};
+</script>
+{% endblock %}

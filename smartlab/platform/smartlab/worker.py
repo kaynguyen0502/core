@@ -8,7 +8,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-from . import config, notify, records, service
+from . import config, notify, records, service, settings
 from .db import SessionLocal, init_db
 
 log = logging.getLogger("smartlab.worker")
@@ -57,7 +57,8 @@ def run():
     while True:
         try:
             with LOCK, SessionLocal() as s:
-                events = service.check_all(s, remind_minutes=config.REMIND_MINUTES, seen_floor=started)
+                remind = settings.get(s, "zalo").get("remind_minutes") or config.REMIND_MINUTES
+                events = service.check_all(s, remind_minutes=int(remind), seen_floor=started)
                 if events:
                     notify.send_events(events)
                     s.commit()

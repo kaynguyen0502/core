@@ -9,7 +9,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Form, HTTPException
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from fastapi.templating import Jinja2Templates
 from fastapi import Request
@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from datetime import date, datetime, timedelta
 
-from . import alarms, config, records, service
+from . import alarms, config, notify, records, service, settings, tts
 from . import db as dbmod
 from .db import init_db
 from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState
@@ -237,3 +237,156 @@ async def catalog_save(code: str, request: Request, user=Depends(admin), s=Depen
     if creating:
         service.ensure_states(s)
     return RedirectResponse("/catalog", status_code=303)
+
+
+# ---------------------------------------------------------------- cấu hình trên web: Zalo, âm thanh
+def _nav(request, active):
+    return {"request": request, "active": active, "site": config.SITE_NAME}
+
+
+@app.get("/cai-dat", include_in_schema=False)
+def settings_home(user=Depends(admin)):
+    return RedirectResponse("/cai-dat/zalo")
+
+
+@app.get("/cai-dat/zalo", response_class=HTMLResponse)
+def zalo_page(request: Request, msg: str = "", user=Depends(admin), s=Depends(db)):
+    z = settings.get(s, "zalo")
+    return templates.TemplateResponse(request, "settings_zalo.html", {
+        **_nav(request, "zalo"), "z": z, "token_mask": settings.mask(z["token"]), "kinds": settings.KINDS,
+        "env_fallback": not z["token"] and bool(config.ZALO_SEND_URL), "msg": msg})
+
+
+@app.post("/cai-dat/zalo")
+async def zalo_save(request: Request, user=Depends(admin), s=Depends(db)):
+    f = await request.form()
+    ids, names = f.getlist("rid"), f.getlist("rname")
+    on = set(f.getlist("ron"))
+    recipients = [{"id": i.strip(), "name": (n or "").strip(), "on": str(k) in on}
+                  for k, (i, n) in enumerate(zip(ids, names)) if i.strip()]
+    try:
+        remind = max(5, min(int(f.get("remind_minutes") or 30), 240))
+    except ValueError:
+        remind = 30
+    settings.put(s, "zalo", {
+        "token": (f.get("token") or "").strip(),
+        "recipients": recipients,
+        "kinds": {k: (k in f.getlist("kinds")) for k in settings.KINDS},
+        "prefix": (f.get("prefix") or "").strip()[:40],
+        "remind_minutes": remind,
+    }, user)
+    return RedirectResponse("/cai-dat/zalo?msg=Đã lưu", status_code=303)
+
+
+def _zalo_error(e):
+    return JSONResponse({"ok": False, "error": str(e)}, status_code=200)
+
+
+@app.post("/cai-dat/zalo/kiem-tra")
+def zalo_check(user=Depends(admin), s=Depends(db)):
+    z = settings.zalo_effective(s)
+    if not z["token"]:
+        return _zalo_error("Chưa có token")
+    try:
+        me = notify.call(z["token"], "getMe")
+    except Exception as e:  # noqa: BLE001 - báo nguyên văn lỗi cho người cấu hình
+        return _zalo_error(e)
+    name = me.get("display_name") or me.get("account_name") or me.get("name") or str(me)
+    return {"ok": True, "bot": name}
+
+
+@app.post("/cai-dat/zalo/tim-chat")
+def zalo_find_chats(user=Depends(admin), s=Depends(db)):
+    """Đọc tin nhắn gần đây gửi tới bot để lấy chat ID (người nhắn riêng hoặc nhóm có bot)."""
+    z = settings.zalo_effective(s)
+    if not z["token"]:
+        return _zalo_error("Chưa có token")
+    try:
+        res = notify.call(z["token"], "getUpdates", {"timeout": 5}, timeout=20)
+    except Exception as e:  # noqa: BLE001
+        return _zalo_error(e)
+    items = res if isinstance(res, list) else [res]
+    found = {}
+    for it in items:
+        m = (it or {}).get("message") or {}
+        chat, frm = m.get("chat") or {}, m.get("from") or {}
+        if chat.get("id"):
+            kind = "Nhóm" if str(chat.get("chat_type", "")).upper() == "GROUP" else "Cá nhân"
+            found[str(chat["id"])] = {"id": str(chat["id"]), "type": kind,
+                                      "name": chat.get("display_name") or frm.get("display_name") or "",
+                                      "text": (m.get("text") or "")[:60]}
+    return {"ok": True, "chats": list(found.values())}
+
+
+@app.post("/cai-dat/zalo/gui-thu")
+def zalo_test(user=Depends(admin), s=Depends(db)):
+    z = settings.zalo_effective(s)
+    if not z["token"] or not z["recipients"]:
+        return _zalo_error("Chưa có token hoặc chưa có người nhận")
+    now = records.to_local(service.utcnow()).strftime("%H:%M %d/%m/%Y")
+    res = notify.send_text(z, f"{z['prefix']} ✅ Tin thử từ SmartLab lúc {now}. Nhận được tin này là cấu hình Zalo đã đúng.")
+    return {"ok": all(e is None for _, e in res), "results": [{"name": n, "error": e} for n, e in res]}
+
+
+@app.get("/cai-dat/am-thanh", response_class=HTMLResponse)
+def sound_page(request: Request, msg: str = "", user=Depends(admin), s=Depends(db)):
+    c = settings.get(s, "sound")
+    have = tts.clips(s)
+    want = tts.wanted(s)
+    total = sum(len(v) for v in want.values())
+    ready = sum(len(v) for v in have.values())
+    sample = next(iter(want.items()), None)
+    return templates.TemplateResponse(request, "settings_sound.html", {
+        **_nav(request, "am-thanh"), "c": c, "key_mask": settings.mask(c["fpt_key"]), "voices": settings.FPT_VOICES,
+        "total": total, "ready": ready, "msg": msg, "dups": tts.duplicates(s),
+        "sample_code": sample[0] if sample else "", "sample_text": sample[1]["alarm"][0] if sample and sample[1] else ""})
+
+
+@app.post("/cai-dat/am-thanh")
+async def sound_save(request: Request, user=Depends(admin), s=Depends(db)):
+    f = await request.form()
+
+    def num(name, lo, hi, default):
+        try:
+            return max(lo, min(int(f.get(name) or default), hi))
+        except ValueError:
+            return default
+    voice = f.get("voice") if f.get("voice") in ("off", "browser", "fpt") else "off"
+    fpt_voice = f.get("fpt_voice") if f.get("fpt_voice") in settings.FPT_VOICES else "myan"
+    settings.put(s, "sound", {
+        "default_on": f.get("default_on") == "1",
+        "chime": f.get("chime") if f.get("chime") in ("0", "1", "3") else "3",
+        "volume": num("volume", 5, 100, 70),
+        "repeat_minutes": num("repeat_minutes", 1, 60, 5),
+        "mute_minutes": num("mute_minutes", 5, 240, 30),
+        "offline_chime": f.get("offline_chime") == "1",
+        "voice": voice, "fpt_key": (f.get("fpt_key") or "").strip(), "fpt_voice": fpt_voice,
+        "speed": num("speed", -3, 3, 0),
+        "alarm_text": (f.get("alarm_text") or "").strip()[:200],
+        "offline_text": (f.get("offline_text") or "").strip()[:200],
+    }, user)
+    return RedirectResponse("/cai-dat/am-thanh?msg=Đã lưu", status_code=303)
+
+
+@app.post("/cai-dat/am-thanh/tao-giong")
+def sound_build(user=Depends(admin), s=Depends(db)):
+    made, have, errors = tts.build(s)
+    return {"ok": not errors, "made": made, "have": have, "errors": errors}
+
+
+@app.get("/api/sound")
+def api_sound(s=Depends(db)):
+    """Cấu hình âm thanh cho màn hình dashboard (không kèm khóa bí mật) + các file giọng đọc đã có."""
+    c = settings.get(s, "sound")
+    c.pop("fpt_key", None)
+    return {**c, "clips": tts.clips(s) if c["voice"] == "fpt" else {}}
+
+
+@app.get("/audio/{name}")
+def audio(name: str):
+    if not tts.NAME_RE.match(name):
+        raise HTTPException(404)
+    path = Path(config.AUDIO_DIR) / name
+    if not path.is_file():
+        raise HTTPException(404)
+    return FileResponse(path, media_type="audio/mpeg", headers={"Cache-Control": "public, max-age=31536000"})

@@ -6,6 +6,7 @@ PointState  : trạng thái hiện tại của mỗi điểm (để dashboard đ
 AlarmEvent  : nhật ký cảnh báo (vượt ngưỡng, mất tín hiệu, trở lại bình thường)
 AuditLog    : ai sửa danh mục, sửa gì, lúc nào (phục vụ ISO 15189)
 LogEntry    : sổ theo dõi ISO 15189 – giá trị mỗi điểm tại các mốc ghi sổ (mặc định 07:00, 13:00)
+Setting     : cấu hình sửa trên web (Zalo, âm thanh / giọng đọc) – khóa -> JSON
 """
 from datetime import datetime
 
@@ -105,3 +106,10 @@ class LogEntry(Base):
     status: Mapped[str] = mapped_column(String(16))                     # dat | khong_dat | khong_du_lieu
     note: Mapped[str] = mapped_column(String(255), default="")
     __table_args__ = (UniqueConstraint("point_id", "slot", name="uq_log_point_slot"),)
+
+
+class Setting(Base):
+    """Cấu hình sửa trên trang web (thay cho sửa file .env)."""
+    __tablename__ = "settings"
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[dict] = mapped_column(JSON, default=dict)

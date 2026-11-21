@@ -46,6 +46,8 @@ REMIND_MINUTES = int(_env("SMARTLAB_REMIND_MINUTES", "30"))
 LOG_TIMES = [t.strip() for t in _env("SMARTLAB_LOG_TIMES", "07:00,13:00").split(",") if t.strip()]
 # Thư mục xuất dữ liệu tự động hằng tháng
 EXPORT_DIR = _env("SMARTLAB_EXPORT_DIR", os.path.join(os.getcwd(), "exports"))
+# File giọng đọc cảnh báo đã tạo sẵn (mp3)
+AUDIO_DIR = _env("SMARTLAB_AUDIO_DIR", os.path.join(os.getcwd(), "audio"))
 
 ADMIN_USER = _env("SMARTLAB_ADMIN_USER", "admin")
 ADMIN_PASSWORD = _env("SMARTLAB_ADMIN_PASSWORD", "")    # bắt buộc đặt khi triển khai

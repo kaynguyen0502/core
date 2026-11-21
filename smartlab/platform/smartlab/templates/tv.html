@@ -100,6 +100,7 @@ footer a{color:#9fc1ff}
     <span class="lg"><i style="background:var(--alarm)"></i>Vượt ngưỡng (đã báo Zalo)</span>
     <span class="lg"><i style="background:var(--off)"></i>Mất tín hiệu</span>
     <a href="/so-theo-doi">Sổ theo dõi ISO</a>
+    <a href="/cai-dat">Cài đặt</a>
     <span style="margin-left:auto" id="updated"></span>
   </footer>
 </div>
@@ -155,82 +156,120 @@ function xn(p) {
 }
 
 // ---------------------------------------------------------------- âm thanh cảnh báo (tivi / máy trực)
-// Trình duyệt chỉ cho phát tiếng sau khi người dùng bấm 1 lần -> nút "Âm thanh" / màn "Bấm OK".
-// Vượt ngưỡng: chuông 3 hồi + đọc tên điểm (nếu tivi có giọng tiếng Việt), nhắc lại mỗi 5 phút tới khi hết.
-// Mất tín hiệu: 1 tiếng chuông nhẹ, chỉ 1 lần cho mỗi điểm.
+// Cấu hình ở trang /cai-dat/am-thanh (tải lại mỗi phút). Trình duyệt chỉ cho phát tiếng sau khi người dùng
+// bấm 1 lần -> nút "Âm thanh" / màn "Bấm OK". Vượt ngưỡng: chuông + giọng đọc, nhắc lại tới khi hết.
+// Mất tín hiệu: 1 tiếng chuông nhẹ (+ giọng đọc nếu có), chỉ 1 lần cho mỗi điểm.
 const Sound = {
   enabled: false, ctx: null, mutedUntil: 0, alarmSet: new Set(), offSet: new Set(), lastPlay: 0, first: true,
-  REPEAT_MS: 5 * 60 * 1000, MUTE_MS: 30 * 60 * 1000,
-  store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} },
+  cfg: {chime: "3", volume: 70, repeat_minutes: 5, mute_minutes: 30, offline_chime: true, voice: "off",
+        alarm_text: "Cảnh báo. {ten} vượt ngưỡng.", offline_text: "", clips: {}, default_on: false},
+  buffers: {},
+  get REPEAT_MS() { return this.cfg.repeat_minutes * 60000; },
+  get MUTE_MS() { return this.cfg.mute_minutes * 60000; },
+  store(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
-  init() {
+  async loadCfg() {
+    try { this.cfg = await (await fetch("/api/sound", {cache: "no-store"})).json(); } catch (e) { return; }
+    if (this.ctx) this.preload();
+  },
+  async init() {
     const q = new URLSearchParams(location.search).get("sound");
     if (q === "1") this.store("smartlab_sound", "1");
-    if (q === "0") this.store("smartlab_sound");
-    if (this.load("smartlab_sound") === "1") document.getElementById("gate").classList.add("on");
-    setTimeout(() => document.getElementById("gate").classList.contains("on") && document.getElementById("gateBtn").focus(), 300);
+    if (q === "0") this.store("smartlab_sound", "0");
+    await this.loadCfg();
+    const pref = this.load("smartlab_sound");
+    if (pref === "1" || (pref !== "0" && this.cfg.default_on)) {
+      document.getElementById("gate").classList.add("on");
+      setTimeout(() => document.getElementById("gateBtn").focus(), 300);
+    }
+    setInterval(() => this.loadCfg(), 60000);
   },
   unlock() {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return false;
     this.ctx = this.ctx || new AC();
     if (this.ctx.state === "suspended") this.ctx.resume();
+    this.preload();
     return true;
+  },
+  async preload() {                       // tải sẵn file giọng đọc để phát ngay khi báo động
+    for (const kinds of Object.values(this.cfg.clips || {})) for (const url of Object.values(kinds)) {
+      if (this.buffers[url]) continue;
+      try {
+        const data = await (await fetch(url)).arrayBuffer();
+        this.buffers[url] = await new Promise((ok, bad) => this.ctx.decodeAudioData(data, ok, bad));
+      } catch (e) {}
+    }
   },
   set(on) {
     this.enabled = on && this.unlock();
-    this.store("smartlab_sound", this.enabled ? "1" : undefined);
+    this.store("smartlab_sound", this.enabled ? "1" : "0");
     const btn = document.getElementById("snd");
     btn.textContent = this.enabled ? "Âm thanh: BẬT" : "Âm thanh: TẮT";
     btn.classList.toggle("on", this.enabled); btn.setAttribute("aria-pressed", String(this.enabled));
     document.getElementById("gate").classList.remove("on");
     if (this.enabled) { this.tone([[660, .18], [0, .08], [880, .25]]); this.lastPlay = 0; this.first = true; refresh(); }
   },
-  tone(seq, vol = 0.5) {
-    if (!this.ctx) return;
-    let t = this.ctx.currentTime + 0.05;
+  tone(seq, vol) {                        // trả về số giây phát
+    if (!this.ctx) return 0;
+    vol = vol ?? this.cfg.volume / 100 * 0.7;
+    const start = this.ctx.currentTime + 0.05; let t = start;
     for (const [f, dur] of seq) {
       if (f) {
         const o = this.ctx.createOscillator(), g = this.ctx.createGain();
         o.type = "square"; o.frequency.value = f;
-        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(Math.max(vol, 0.001), t + 0.02);
         g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
         o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.02);
       }
       t += dur;
     }
-    return t - this.ctx.currentTime;
+    return t - start;
+  },
+  playClips(urls, delay) {                // phát lần lượt các file giọng đọc
+    let t = this.ctx.currentTime + delay;
+    for (const u of urls) {
+      const b = this.buffers[u]; if (!b) continue;
+      const src = this.ctx.createBufferSource(); src.buffer = b; src.connect(this.ctx.destination);
+      src.start(t); t += b.duration + 0.4;
+    }
   },
   say(text, delay) {
     const sy = window.speechSynthesis;
-    if (!sy || !sy.getVoices) return;
+    if (!sy || !sy.getVoices || !text) return;
     const v = sy.getVoices().find(x => /^vi/i.test(x.lang));
-    if (!v) return;                       // tivi không có giọng tiếng Việt -> chỉ phát chuông
-    const u = new SpeechSynthesisUtterance(text);
+    if (!v) return;                       // không có giọng tiếng Việt -> chỉ phát chuông
+    const u = new SpeechSynthesisUtterance(text.replace(/−/g, "âm ").replace(/…/g, " đến ").replace(/µS\/cm/g, " micro si-men")
+      .replace(/%/g, " phần trăm").replace(/≤/g, "tối đa ").replace(/°C/g, " độ C").replace(/(\d),(\d)/g, "$1 phẩy $2"));
     u.voice = v; u.lang = v.lang; u.rate = 0.95;
     setTimeout(() => sy.speak(u), (delay || 0) * 1000);
   },
+  fill(tpl, p) { return (tpl || "").replace(/\{ten\}/g, p.name).replace(/\{ma\}/g, p.code); },
+  voice(points, kind, delay) {
+    const c = this.cfg;
+    if (c.voice === "fpt") this.playClips(points.map(p => ((c.clips || {})[p.code] || {})[kind]).filter(Boolean), delay);
+    if (c.voice === "browser") this.say(points.map(p => this.fill(kind === "alarm" ? c.alarm_text : c.offline_text, p)
+      + (kind === "alarm" && p.message ? " " + p.message : "")).join(". "), delay);
+  },
   alarm(points) {
-    const hi = [988, .22], lo = [740, .22], gap = [0, .12];
-    const len = this.tone([hi, lo, hi, lo, gap, hi, lo, hi, lo, gap, hi, lo, hi, lo], 0.6);
-    const names = points.map(p => `${p.name}, ${p.message}`).join(". ");
-    this.say(`Cảnh báo vượt ngưỡng. ${names}`.replace(/−/g, "âm ").replace(/…/g, " đến ").replace(/µS\/cm/g, " micro si-men").replace(/%/g, " phần trăm").replace(/≤/g, "tối đa ").replace(/°C/g, " độ C").replace(/(\d),(\d)/g, "$1 phẩy $2"), len + 0.3);
+    const hi = [988, .22], lo = [740, .22], gap = [0, .12], n = {"3": 3, "1": 1, "0": 0}[this.cfg.chime] ?? 3;
+    const seq = []; for (let i = 0; i < n; i++) seq.push(hi, lo, hi, lo, gap);
+    const len = this.tone(seq);
+    this.voice(points, "alarm", len + 0.3);
     this.lastPlay = Date.now();
   },
   update(points) {
     const alarm = points.filter(p => p.state === "alarm"), off = points.filter(p => p.state === "offline");
     const newAlarm = alarm.filter(p => !this.alarmSet.has(p.code));
-    const newOff = off.filter(p => !this.offSet.has(p.code));
+    const newOff = this.first ? [] : off.filter(p => !this.offSet.has(p.code));   // mở trang: không kêu cho điểm mất tín hiệu từ trước
     this.alarmSet = new Set(alarm.map(p => p.code));
-    if (!this.first) newOff.forEach(p => this.offSet.add(p.code));
-    else off.forEach(p => this.offSet.add(p.code));    // mở trang: không kêu cho điểm đã mất tín hiệu từ trước
-    for (const c of [...this.offSet]) if (!off.some(p => p.code === c)) this.offSet.delete(c);
+    this.offSet = new Set(off.map(p => p.code));
     const first = this.first; this.first = false;
     if (!this.enabled || !this.ctx || Date.now() < this.mutedUntil) return;
     if (alarm.length && (newAlarm.length || first || Date.now() - this.lastPlay >= this.REPEAT_MS)) {
       this.alarm(newAlarm.length ? newAlarm : alarm);
-    } else if (!first && newOff.length) {
-      this.tone([[523, .25], [0, .1], [392, .4]], 0.35);
+    } else if (newOff.length && this.cfg.offline_chime) {
+      this.voice(newOff, "offline", this.tone([[523, .25], [0, .1], [392, .4]], this.cfg.volume / 100 * 0.4) + 0.3);
     }
   },
 };

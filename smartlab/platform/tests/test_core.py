@@ -256,3 +256,69 @@ def test_reset_data_keeps_points(session):
     with dbmod.SessionLocal() as s:
         assert s.scalar(select(func.count()).select_from(Reading)) == 0
         assert s.scalar(select(func.count()).select_from(Point)) == n_points
+
+
+# ---------- cấu hình trên web: Zalo, âm thanh ----------
+AUTH = {"Authorization": "Basic " + base64.b64encode(b"admin:test-pass").decode()}
+
+
+def test_settings_secret_kept_and_audited(session):
+    from smartlab import settings
+    settings.put(session, "zalo", {"token": "abc123456", "prefix": "[HS]"}, "admin")
+    z = settings.put(session, "zalo", {"token": "  ", "prefix": "[HS2]"}, "admin")   # để trống = giữ token
+    assert z["token"] == "abc123456" and z["prefix"] == "[HS2]" and z["kinds"]["alarm"] is True
+    logs = session.scalars(select_audit()).all()
+    assert logs and all("abc123456" not in a.detail for a in logs)
+    assert settings.mask("abc123456") == "••••••" and settings.mask("x" * 20 + "WXYZ").endswith("WXYZ")
+
+
+def select_audit():
+    from sqlalchemy import select
+    return select(AuditLog).where(AuditLog.action.like("cấu hình%"))
+
+
+def test_zalo_send_respects_kinds(session, monkeypatch):
+    from smartlab import notify, settings
+    sent = []
+    monkeypatch.setattr(notify, "call", lambda token, method, payload=None, timeout=15: sent.append((token, payload)) or {})
+    settings.put(session, "zalo", {"token": "T", "recipients": [{"id": "g1", "name": "Nhóm", "on": True},
+                                                                 {"id": "u2", "name": "Tắt", "on": False}],
+                                   "kinds": {"normal": False}})
+    p = session.query(Point).first()
+    ev_alarm = AlarmEvent(point_id=p.id, ts=T0, kind="alarm", message="SH19-M nóng", notified=False)
+    ev_norm = AlarmEvent(point_id=p.id, ts=T0, kind="normal", message="SH19-M bình thường", notified=False)
+    session.add_all([ev_alarm, ev_norm]); session.flush()
+    notify.send_events([ev_alarm, ev_norm])
+    assert sent == [("T", {"chat_id": "g1", "text": "[SmartLab HS] 🔴 SH19-M nóng"})]
+    assert ev_alarm.notified and ev_norm.notified
+
+
+def test_settings_pages_sound_api_and_tts_cache(session, tmp_path, monkeypatch):
+    from fastapi.testclient import TestClient
+    from smartlab import config, tts, web
+    monkeypatch.setattr(config, "AUDIO_DIR", str(tmp_path))
+    c = TestClient(web.app)
+    assert c.get("/cai-dat/zalo").status_code == 401
+    assert "Zalo Bot" in c.get("/cai-dat/zalo", headers=AUTH).text
+    r = c.post("/cai-dat/zalo", headers=AUTH, data={"token": "TK", "rid": ["g1", ""], "rname": ["Nhóm khoa", ""],
+                                                     "ron": ["0"], "kinds": ["alarm", "offline"], "remind_minutes": "45",
+                                                     "prefix": "[HS]"}, follow_redirects=False)
+    assert r.status_code == 303
+    page = c.get("/cai-dat/zalo", headers=AUTH).text
+    assert "Nhóm khoa" in page and "TK" not in page.replace("TKB", "")
+    r = c.post("/cai-dat/am-thanh", headers=AUTH, data={"voice": "fpt", "fpt_key": "KEY9", "fpt_voice": "giahuy",
+                                                         "chime": "1", "volume": "80", "repeat_minutes": "3",
+                                                         "mute_minutes": "20", "alarm_text": "Cảnh báo {ten}",
+                                                         "offline_text": ""}, follow_redirects=False)
+    assert r.status_code == 303
+    calls = []
+    monkeypatch.setattr(tts, "fpt_tts", lambda text, key, voice, speed: calls.append((text, key, voice)) or b"ID3fake")
+    d = c.post("/cai-dat/am-thanh/tao-giong", headers=AUTH).json()
+    assert d["ok"] and d["made"] == 18 and calls[0][1:] == ("KEY9", "giahuy")      # 21 điểm, 3 cặp trùng tên -> 18 câu
+    assert c.post("/cai-dat/am-thanh/tao-giong", headers=AUTH).json()["made"] == 0  # đã có thì không tạo lại
+    assert "SH25-M, SH26-M" in c.get("/cai-dat/am-thanh", headers=AUTH).text           # cảnh báo trùng tên
+    s = c.get("/api/sound").json()
+    assert "fpt_key" not in s and s["repeat_minutes"] == 3 and s["chime"] == "1"
+    url = s["clips"]["SH19-M"]["alarm"]
+    assert c.get(url).content == b"ID3fake"
+    assert c.get("/audio/../../.env").status_code == 404

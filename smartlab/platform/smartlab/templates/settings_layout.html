@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Cài đặt{% endblock %} – SmartLab</title>
+<style>
+:root{--ink:#142033;--mute:#4a586e;--line:#d8e0ec;--blue:#1d5fd1;--ok:#0f7a4f;--bad:#b42318}
+body{margin:0;background:#f6f8fb;color:var(--ink);font-family:Inter,"Segoe UI",system-ui,sans-serif;font-size:15px}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:16px}
+h1{margin:0;font-size:26px}h2{margin:0 0 4px;font-size:18px}
+nav{display:flex;gap:6px;flex-wrap:wrap}
+nav a{padding:8px 14px;border-radius:8px;color:var(--ink);text-decoration:none;border:1px solid var(--line);background:#fff}
+nav a.on{background:var(--blue);border-color:var(--blue);color:#fff}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:12px}
+.hint{color:var(--mute);font-size:14px;margin:0}
+label{display:flex;flex-direction:column;gap:4px;font-weight:600}
+label.inline{flex-direction:row;align-items:center;gap:8px;font-weight:500}
+input[type=text],input[type=password],input[type=number],select,textarea{font:inherit;padding:8px 10px;border:1px solid #c3cedd;border-radius:8px;width:100%;box-sizing:border-box;background:#fff}
+input[type=checkbox],input[type=radio]{width:18px;height:18px}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:flex-end}.row>*{flex:1 1 200px}
+button,.btn{font:inherit;padding:8px 16px;border-radius:8px;border:1px solid var(--blue);background:var(--blue);color:#fff;cursor:pointer;min-height:38px;text-decoration:none;display:inline-flex;align-items:center}
+button.sec{background:#fff;color:var(--blue)}button.del{background:#fff;color:var(--bad);border-color:#e4b4ae}
+table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:6px;border-top:1px solid #e8edf4;vertical-align:middle}
+th{border-top:0;font-size:13px;color:var(--mute)}
+.msg{padding:10px 14px;border-radius:8px;background:#e7f6ee;color:var(--ok);font-weight:600}
+.out{white-space:pre-wrap;font-size:14px;padding:10px;border-radius:8px;background:#f1f4f9;display:none}
+.out.on{display:block}.ok{color:var(--ok)}.bad{color:var(--bad)}
+code{background:#eef2f8;padding:1px 5px;border-radius:4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div><h1>{% block heading %}Cài đặt{% endblock %}</h1><p class="hint">{{ site }}</p></div>
+  <nav>
+    <a href="/cai-dat/zalo" class="{{ 'on' if active == 'zalo' }}">Thông báo Zalo</a>
+    <a href="/cai-dat/am-thanh" class="{{ 'on' if active == 'am-thanh' }}">Âm thanh &amp; giọng đọc</a>
+    <a href="/catalog">Danh mục điểm đo</a>
+    <a href="/tv">Dashboard</a>
+  </nav>
+  {% if msg %}<div class="msg" role="status">{{ msg }}</div>{% endif %}
+  {% block body %}{% endblock %}
+</div>
+<script>
+async function post(url) {
+  const r = await fetch(url, {method: "POST"});
+  return r.json();
+}
+function show(id, html, ok) {
+  const el = document.getElementById(id);
+  el.innerHTML = html; el.className = "out on " + (ok ? "ok" : "bad");
+}
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+</script>
+{% block script %}{% endblock %}
+</body>
+</html>

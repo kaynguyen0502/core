@@ -1,0 +1,92 @@
+{% extends "settings_layout.html" %}
+{% block title %}Thông báo Zalo{% endblock %}
+{% block heading %}Thông báo qua Zalo{% endblock %}
+{% block body %}
+<form method="post" action="/cai-dat/zalo" class="card" id="f">
+  <h2>1. Zalo Bot</h2>
+  <p class="hint">Tạo bot trong ứng dụng Zalo: tìm OA <b>"Zalo Bot Manager"</b> → Tạo bot → nhận <b>token</b>. Dán token vào đây.</p>
+  {% if env_fallback %}<p class="hint">Đang dùng token cũ trong file <code>.env</code>. Nhập token ở đây để quản lý trên web.</p>{% endif %}
+  <div class="row">
+    <label>Token bot
+      <input type="password" name="token" autocomplete="off" placeholder="{{ ('Đã lưu ' ~ token_mask ~ ' – để trống nếu không đổi') if token_mask else 'Dán token bot' }}">
+    </label>
+    <div style="flex:0 0 auto"><button type="button" class="sec" id="check">Kiểm tra bot</button></div>
+  </div>
+  <div class="out" id="checkOut"></div>
+
+  <h2>2. Người / nhóm nhận tin</h2>
+  <p class="hint">Mỗi người cần <b>nhắn 1 tin bất kỳ cho bot</b> (hoặc thêm bot vào nhóm Zalo của khoa rồi nhắn 1 tin trong nhóm), sau đó bấm <b>Tìm chat ID</b>.</p>
+  <table>
+    <thead><tr><th style="width:70px">Nhận tin</th><th>Tên gợi nhớ</th><th>Chat ID</th><th style="width:60px"></th></tr></thead>
+    <tbody id="rows">
+    {% for r in z.recipients %}
+      <tr><td><input type="checkbox" name="ron" value="{{ loop.index0 }}" {{ 'checked' if r.on }} aria-label="Nhận tin"></td>
+        <td><input type="text" name="rname" value="{{ r.name }}" aria-label="Tên"></td>
+        <td><input type="text" name="rid" value="{{ r.id }}" aria-label="Chat ID"></td>
+        <td><button type="button" class="del" onclick="this.closest('tr').remove();renumber()" aria-label="Xóa">Xóa</button></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div class="row" style="flex-wrap:wrap">
+    <div style="flex:0 0 auto;display:flex;gap:8px;flex-wrap:wrap">
+      <button type="button" class="sec" id="find">Tìm chat ID</button>
+      <button type="button" class="sec" id="add">Thêm dòng trống</button>
+    </div>
+  </div>
+  <div class="out" id="findOut"></div>
+
+  <h2>3. Loại tin gửi</h2>
+  {% for k, label in kinds.items() %}
+    <label class="inline"><input type="checkbox" name="kinds" value="{{ k }}" {{ 'checked' if z.kinds.get(k, true) }}> {{ label }}</label>
+  {% endfor %}
+  <div class="row">
+    <label>Nhắc lại khi vẫn vượt ngưỡng sau (phút)<input type="number" name="remind_minutes" min="5" max="240" value="{{ z.remind_minutes }}"></label>
+    <label>Đầu dòng tin nhắn<input type="text" name="prefix" maxlength="40" value="{{ z.prefix }}"></label>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button type="submit">Lưu cấu hình</button>
+    <button type="button" class="sec" id="test">Gửi tin thử</button>
+  </div>
+  <div class="out" id="testOut"></div>
+  <p class="hint">Lưu xong có hiệu lực ngay, không cần khởi động lại. Gửi thử dùng cấu hình <b>đã lưu</b>.</p>
+</form>
+{% endblock %}
+{% block script %}
+<script>
+function renumber() {
+  document.querySelectorAll("#rows tr").forEach((tr, i) => { const c = tr.querySelector("input[name=ron]"); if (c) c.value = i; });
+}
+function addRow(id = "", name = "") {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `<td><input type="checkbox" name="ron" checked aria-label="Nhận tin"></td>
+    <td><input type="text" name="rname" value="${esc(name)}" aria-label="Tên"></td>
+    <td><input type="text" name="rid" value="${esc(id)}" aria-label="Chat ID"></td>
+    <td><button type="button" class="del" onclick="this.closest('tr').remove();renumber()" aria-label="Xóa">Xóa</button></td>`;
+  document.getElementById("rows").appendChild(tr); renumber();
+}
+document.getElementById("add").onclick = () => addRow();
+document.getElementById("check").onclick = async () => {
+  const d = await post("/cai-dat/zalo/kiem-tra");
+  show("checkOut", d.ok ? `Kết nối được bot: <b>${esc(d.bot)}</b>` : `Lỗi: ${esc(d.error)}. Nếu vừa dán token mới, bấm Lưu trước.`, d.ok);
+};
+document.getElementById("find").onclick = async () => {
+  show("findOut", "Đang đọc tin nhắn gửi tới bot…", true);
+  const d = await post("/cai-dat/zalo/tim-chat");
+  if (!d.ok) return show("findOut", `Lỗi: ${esc(d.error)}`, false);
+  if (!d.chats.length) return show("findOut", "Chưa thấy tin nhắn mới. Nhắn 1 tin cho bot (hoặc trong nhóm có bot) rồi bấm lại.", false);
+  const have = new Set([...document.querySelectorAll("input[name=rid]")].map(i => i.value));
+  show("findOut", d.chats.map(c => `${esc(c.type)} · <b>${esc(c.name || "(không tên)")}</b> · ${esc(c.id)} · “${esc(c.text)}” ` +
+    (have.has(c.id) ? "(đã có)" : `<button type="button" class="sec" data-id="${esc(c.id)}" data-name="${esc(c.name)}">Thêm</button>`)).join("<br>"), true);
+};
+document.getElementById("findOut").addEventListener("click", e => {
+  const b = e.target.closest("button[data-id]");
+  if (b) { addRow(b.dataset.id, b.dataset.name); b.replaceWith("(đã thêm – nhớ bấm Lưu)"); }
+});
+document.getElementById("test").onclick = async () => {
+  show("testOut", "Đang gửi…", true);
+  const d = await post("/cai-dat/zalo/gui-thu");
+  if (d.error) return show("testOut", `Lỗi: ${esc(d.error)}`, false);
+  show("testOut", d.results.map(r => `${esc(r.name)}: ${r.error ? "LỖI – " + esc(r.error) : "đã gửi"}`).join("<br>"), d.ok);
+};
+</script>
+{% endblock %}
