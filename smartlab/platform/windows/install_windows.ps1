@@ -467,6 +467,11 @@ if (Test-Path $XnIni) {
 } else {
     Info "Chưa có $XnIni -> bỏ qua cầu nối máy xét nghiệm (xem tools\xn_bridge.example.ini)"
 }
+# Đọc log Roche CommServer (cobas pro) -> ô Máy xét nghiệm. Tạo cấu hình mặc định nếu chưa có.
+$XnLogIni = "$App\xn_log.ini"
+if (-not (Test-Path $XnLogIni)) { Copy-Item "$App\tools\xn_log.example.ini" $XnLogIni }
+icacls $XnLogIni /inheritance:r /grant:r "*S-1-5-32-544:F" "*S-1-5-18:F" | Out-Null
+Install-SmartLabService "SmartLab-XNLog" $VPy "tools\xn_log.py" $App @("SmartLab-MQTT")
 
 # ---------------------------------------------------------------- 8. Tường lửa, nguồn điện
 Step "Mở tường lửa cho mạng nội bộ ($WebPort dashboard, $Z2mPort Zigbee2MQTT, $MqttPort MQTT)"
