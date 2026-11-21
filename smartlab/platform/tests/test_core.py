@@ -390,3 +390,91 @@ def test_google_tts_upload_build_and_token(session, tmp_path, monkeypatch):
                  data={"voice": "google"}, follow_redirects=False)
     from urllib.parse import unquote
     assert "không đúng" in unquote(bad.headers["location"])
+
+
+# ---------- điều khiển tivi ----------
+class _FakeWS:
+    def __init__(self, replies):
+        self.replies, self.sent, self.closed = list(replies), [], False
+
+    def recv(self, timeout=None):
+        if not self.replies:
+            raise TimeoutError
+        return self.replies.pop(0)
+
+    def send(self, m):
+        import json as _j
+        self.sent.append(_j.loads(m))
+
+    def close(self):
+        self.closed = True
+
+
+def test_tv_remote_pair_open_and_keys(monkeypatch):
+    import json as _j
+    import websockets.sync.client as wsc
+    from smartlab import tv_remote
+    fake = _FakeWS([_j.dumps({"event": "ms.channel.connect", "data": {"token": "T123"}})])
+    seen = {}
+    monkeypatch.setattr(wsc, "connect", lambda url, **kw: seen.setdefault("url", url) and fake)
+    monkeypatch.setattr(tv_remote.time, "sleep", lambda s: None)
+    tok = tv_remote.run("192.168.103.152", "", tv_remote.open_dashboard_steps("http://hs:8100/tv?sound=1", 10))
+    assert tok == "T123" and fake.closed and "token" not in seen["url"]
+    assert fake.sent[0]["params"]["data"] == {"appId": "org.tizen.browser", "action_type": "NATIVE_LAUNCH",
+                                              "metaTag": "http://hs:8100/tv?sound=1"}
+    assert fake.sent[1]["params"]["DataOfCmd"] == "KEY_ENTER"
+    denied = _FakeWS([_j.dumps({"event": "ms.channel.unauthorized"})])
+    monkeypatch.setattr(wsc, "connect", lambda url, **kw: denied)
+    with pytest.raises(tv_remote.TvError):
+        tv_remote.run("192.168.103.152", "", [])
+
+
+def test_tv_wake_packet(monkeypatch):
+    import socket as _s
+    from smartlab import tv_remote
+    got = []
+    monkeypatch.setattr(_s.socket, "sendto", lambda self, data, addr: got.append((data, addr)) or len(data), raising=False)
+    targets = tv_remote.wake("AA:BB:CC:DD:EE:01", "192.168.103.152", "192.168.103.255")
+    assert "192.168.103.255" in targets and "255.255.255.255" in targets
+    assert got and got[0][0] == b"\xff" * 6 + bytes.fromhex("aabbccddee01") * 16
+    with pytest.raises(tv_remote.TvError):
+        tv_remote.wake("xx", "1.2.3.4")
+
+
+def test_tv_auto_opens_on_power_and_daily(session, monkeypatch):
+    from smartlab import settings, tv_auto, tv_remote
+    settings.put(session, "tv", {"enabled": True, "ip": "192.168.103.152", "mac": "AA:BB:CC:DD:EE:01",
+                                 "dashboard_url": "http://hs:8100/tv?sound=1", "daily_time": "07:00"})
+    states, opened, woke = ["standby"], [], []
+    monkeypatch.setattr(tv_remote, "power_state", lambda ip: states[0])
+    monkeypatch.setattr(tv_auto, "open_dashboard", lambda s, cfg=None: opened.append(1))
+    monkeypatch.setattr(tv_remote, "wake", lambda *a: woke.append(a))
+    a = tv_auto.Auto()
+    assert a.tick(session, datetime(2026, 11, 22, 6, 0)) is None and not woke        # chưa tới giờ
+    a.tick(session, datetime(2026, 11, 22, 7, 0))
+    assert woke and not opened                                                       # tới giờ, tivi chờ -> bật
+    states[0] = "on"
+    assert a.tick(session, datetime(2026, 11, 22, 7, 1)) == "tivi vừa bật" and len(opened) == 1
+    assert a.tick(session, datetime(2026, 11, 22, 7, 2)) is None                     # không mở lại liên tục
+
+
+def test_tv_settings_api(session, monkeypatch):
+    from fastapi.testclient import TestClient
+    from smartlab import settings, tv_auto, web
+    c = TestClient(web.app)
+    assert "Kết nối tivi" in c.get("/cai-dat/tivi", headers=AUTH).text
+    assert c.post("/api/tv/settings", headers=AUTH, json={"ip": "abc"}).status_code == 400
+    assert c.post("/api/tv/settings", headers=AUTH, json={"ip": "192.168.103.152", "daily_time": "7h"}).status_code == 400
+    d = c.post("/api/tv/settings", headers=AUTH, json={"ip": "192.168.103.152", "daily_time": "07:00",
+                                                         "dashboard_url": "http://hs:8100/tv?sound=1"}).json()
+    assert d["ip"] == "192.168.103.152" and "token" not in d and d["paired"] is False
+    settings.put(session, "tv", {"token": "T1"})
+    session.expire_all()
+    assert c.get("/api/tv/settings", headers=AUTH).json()["paired"] is True
+    calls = []
+    monkeypatch.setattr(tv_auto, "open_dashboard", lambda s, cfg=None: calls.append(cfg["ip"]))
+    assert c.post("/api/tv/do/open", headers=AUTH).json()["ok"] and calls == ["192.168.103.152"]
+    assert c.post("/api/tv/do/xyz", headers=AUTH).status_code == 404
+    c.post("/api/tv/settings", headers=AUTH, json={"ip": "192.168.103.153"})            # đổi tivi -> phải cho phép lại
+    session.expire_all()
+    assert settings.get(session, "tv")["token"] == ""

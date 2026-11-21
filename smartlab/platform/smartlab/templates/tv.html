@@ -62,7 +62,9 @@ footer a{color:#9fc1ff}
 .snd.on{background:var(--okbg);color:var(--ok);border-color:#1f6b4c}.snd:focus{outline:3px solid #5b8def;outline-offset:2px}
 .banner .mute{margin-left:12px;font:inherit;font-size:17px;font-weight:700;padding:6px 14px;border-radius:8px;border:0;background:#ffe1e1;color:#3a0f14;cursor:pointer}
 .gate{position:fixed;inset:0;background:rgba(3,7,14,.8);display:none;align-items:center;justify-content:center;z-index:20}
-.gate.on{display:flex}.gate button{font:inherit;font-size:30px;font-weight:800;padding:24px 40px;border-radius:16px;border:0;background:#1d5fd1;color:#fff;cursor:pointer}
+.gate.on{display:flex}
+/* nút phủ kín màn hình: điều khiển tivi bấm OK ở đâu cũng trúng */
+.gate button{position:absolute;inset:0;width:100%;height:100%;font:inherit;font-size:44px;font-weight:800;border:0;background:rgba(29,95,209,.82);color:#fff;cursor:pointer}
 .gate button:focus{outline:4px solid #fff;outline-offset:4px}.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
 </style>
 </head>

@@ -8,7 +8,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-from . import config, notify, records, service, settings
+from . import config, notify, records, service, settings, tv_auto
 from .db import SessionLocal, init_db
 
 log = logging.getLogger("smartlab.worker")
@@ -44,6 +44,7 @@ def run():
     with SessionLocal() as s:
         service.ensure_states(s)
     notify.start_sender()
+    tv_auto.start()
     client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="smartlab-worker")
     if config.MQTT_USER:
         client.username_pw_set(config.MQTT_USER, config.MQTT_PASSWORD)

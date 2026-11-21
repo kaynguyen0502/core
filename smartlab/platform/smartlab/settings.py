@@ -18,6 +18,19 @@ DEFAULTS = {
         "on_offline": True,               # mất tín hiệu / có tín hiệu lại
         "repeat_minutes": 30,             # nhắc lại khi vẫn vượt ngưỡng; 0 = không nhắc
     },
+    "tv": {                               # tivi Samsung trên mạng LAN
+        "enabled": False,
+        "ip": "",
+        "mac": "",
+        "broadcast": "",                  # địa chỉ phát Wake-on-LAN của mạng (vd 192.168.103.255); trống = tự đoán
+        "token": "",                      # tivi cấp sau khi bấm "Cho phép" – tự lưu
+        "dashboard_url": "",              # vd http://192.168.103.151:8100/tv?sound=1
+        "wait_seconds": 10,               # chờ trang tải rồi mới bấm OK
+        "daily_time": "07:00",            # mỗi ngày mở lại dashboard lúc này ("" = không)
+        "wake_daily": True,               # tới giờ mà tivi đang chờ -> bật tivi
+        "on_power": True,                 # tivi vừa bật -> tự mở dashboard
+        "keep_open": False,               # trình duyệt bị đóng -> tự mở lại (sau 10 phút)
+    },
     "sound": {
         "default_on": False,              # mọi màn hình dashboard tự hỏi bật âm thanh khi mở
         "chime": "3",                     # "3" = 3 hồi, "1" = 1 hồi, "0" = không chuông (chỉ giọng đọc)

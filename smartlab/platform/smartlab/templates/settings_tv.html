@@ -1,0 +1,105 @@
+{% extends "settings_layout.html" %}
+{% block title %}Điều khiển tivi{% endblock %}
+{% block heading %}Điều khiển tivi dashboard{% endblock %}
+{% block body %}
+<div class="card">
+  <h2>Điều khiển nhanh</h2>
+  <p class="hint" id="tStatus">Đang kiểm tra tivi…</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <button type="button" data-do="open">Mở dashboard + bật âm thanh</button>
+    <button type="button" class="sec" data-do="wake">Bật tivi</button>
+    <button type="button" class="sec" data-do="off">Tắt tivi</button>
+    <button type="button" class="sec" data-do="vol_down">Âm lượng −</button>
+    <button type="button" class="sec" data-do="vol_up">Âm lượng +</button>
+    <button type="button" class="sec" data-do="mute">Tắt/mở tiếng</button>
+    <button type="button" class="sec" data-do="enter">Phím OK</button>
+    <button type="button" class="sec" data-do="back">Quay lại</button>
+  </div>
+  <div class="out" id="tOut"></div>
+</div>
+
+<div class="card">
+  <h2>Cài đặt tivi</h2>
+  <p class="hint">Trên tivi Samsung: <b>Cài đặt → Kết nối → Mạng → Cài đặt chuyên môn</b>: bật <b>Điều khiển từ xa IP</b> và
+    <b>Bật nguồn bằng điện thoại</b>. Lần đầu bấm <b>Kết nối tivi</b>, tivi hỏi "Cho phép SmartLab?" – bấm <b>Cho phép</b> bằng remote.</p>
+  <label class="inline"><input type="checkbox" id="tEnabled"> <b>Tự động điều khiển tivi</b> (theo các mục bên dưới)</label>
+  <div class="row">
+    <label>IP tivi<input type="text" id="tIp" placeholder="vd 192.168.103.152"></label>
+    <label>MAC tivi (để bật từ xa)<input type="text" id="tMac" placeholder="bấm Kiểm tra tivi để tự lấy"></label>
+  </div>
+  <label>Địa chỉ dashboard mở trên tivi<input type="text" id="tUrl" placeholder="vd http://192.168.103.151:8100/tv?sound=1"></label>
+  <div class="row">
+    <label>Chờ trang tải trước khi bấm OK (giây)<input type="number" id="tWait" min="3" max="60"></label>
+    <label>Mở lại dashboard mỗi ngày lúc (HH:MM, để trống = không)<input type="text" id="tDaily" placeholder="07:00"></label>
+  </div>
+  <label class="inline"><input type="checkbox" id="tWake"> Tới giờ mở hằng ngày mà tivi đang tắt (chờ) thì bật tivi</label>
+  <label class="inline"><input type="checkbox" id="tOnPower"> Tivi vừa được bật thì tự mở dashboard</label>
+  <label class="inline"><input type="checkbox" id="tKeep"> Trình duyệt bị đóng thì tự mở lại sau 10 phút (tắt nếu tivi còn dùng việc khác)</label>
+  <details><summary class="hint">Nâng cao</summary>
+    <label>Địa chỉ phát Wake-on-LAN của mạng (để trống = tự đoán)<input type="text" id="tBcast" placeholder="vd 192.168.103.255"></label>
+  </details>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <button type="button" id="tSave">Lưu cài đặt</button>
+    <button type="button" class="sec" id="tCheck">Kiểm tra tivi</button>
+    <button type="button" class="sec" data-do="pair">Kết nối tivi (lần đầu)</button>
+    <span id="tMsg" class="hint" role="status"></span>
+  </div>
+</div>
+{% endblock %}
+{% block script %}
+<script>
+const $ = s => document.querySelector(s);
+const STATE = {on: "đang bật", standby: "đang chờ (tắt màn hình)", off: "không trả lời (tắt hẳn hoặc sai IP)"};
+async function postJSON(url, body) {
+  const r = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify(body || {})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.error || ("Lỗi " + r.status));
+  return d;
+}
+function msg(el, text, cls) { $(el).className = cls || "hint"; $(el).textContent = text; }
+function fill(c) {
+  $("#tEnabled").checked = !!c.enabled; $("#tIp").value = c.ip || ""; $("#tMac").value = c.mac || "";
+  $("#tUrl").value = c.dashboard_url || ""; $("#tWait").value = c.wait_seconds; $("#tDaily").value = c.daily_time || "";
+  $("#tWake").checked = !!c.wake_daily; $("#tOnPower").checked = !!c.on_power; $("#tKeep").checked = !!c.keep_open;
+  $("#tBcast").value = c.broadcast || "";
+}
+function collect() {
+  return {enabled: $("#tEnabled").checked, ip: $("#tIp").value, mac: $("#tMac").value, dashboard_url: $("#tUrl").value,
+    wait_seconds: Number($("#tWait").value) || 10, daily_time: $("#tDaily").value, wake_daily: $("#tWake").checked,
+    on_power: $("#tOnPower").checked, keep_open: $("#tKeep").checked, broadcast: $("#tBcast").value};
+}
+async function status() {
+  try {
+    const d = await (await fetch("/api/tv/status", {cache: "no-store"})).json();
+    if (d.state === "chưa cấu hình") return msg("#tStatus", "Chưa nhập IP tivi.");
+    msg("#tStatus", `Tivi ${d.name ? "“" + d.name + "” " : ""}${d.model ? "(" + d.model + ") " : ""}${STATE[d.state] || d.state}` +
+      (d.browser === true ? " · trình duyệt đang mở" : d.browser === false ? " · trình duyệt không mở" : "") +
+      (d.paired ? " · đã được cho phép điều khiển" : " · CHƯA kết nối (bấm Kết nối tivi)"), d.state === "on" ? "ok" : "hint");
+    return d;
+  } catch (e) { msg("#tStatus", "Không kiểm tra được tivi", "bad"); }
+}
+$("#tSave").onclick = async () => {
+  msg("#tMsg", "Đang lưu...");
+  try { fill(await postJSON("/api/tv/settings", collect())); msg("#tMsg", "Đã lưu.", "ok"); status(); }
+  catch (e) { msg("#tMsg", e.message, "bad"); }
+};
+$("#tCheck").onclick = async () => {
+  msg("#tMsg", "Đang kiểm tra (hãy Lưu IP trước)...");
+  const d = await status();
+  if (d && d.mac && !$("#tMac").value) { $("#tMac").value = d.mac; msg("#tMsg", "Đã lấy MAC " + d.mac + ". Bấm Lưu cài đặt.", "ok"); }
+  else msg("#tMsg", "");
+};
+document.addEventListener("click", async e => {
+  const b = e.target.closest("[data-do]"); if (!b) return;
+  const out = $("#tOut");
+  out.className = "out on ok";
+  out.textContent = b.dataset.do === "pair" ? "Đang kết nối – nhìn tivi, nếu hỏi “Cho phép SmartLab?” thì bấm Cho phép…" :
+    b.dataset.do === "open" ? "Đang mở dashboard trên tivi (mất khoảng 10–15 giây)…" : "Đang gửi lệnh…";
+  b.disabled = true;
+  try { const d = await postJSON("/api/tv/do/" + b.dataset.do); out.className = "out on ok"; out.textContent = d.msg; }
+  catch (err) { out.className = "out on bad"; out.textContent = err.message; }
+  b.disabled = false; setTimeout(status, 1500);
+});
+(async () => { try { fill(await (await fetch("/api/tv/settings", {cache: "no-store"})).json()); } catch (e) {} status(); })();
+</script>
+{% endblock %}

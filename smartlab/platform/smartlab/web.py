@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from datetime import date, datetime, timedelta
 
-from . import alarms, config, notify, records, service, settings, tts
+from . import alarms, config, notify, records, service, settings, tts, tv_auto, tv_remote
 from . import db as dbmod
 from .db import init_db
 from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState, ZaloLog
@@ -334,6 +334,96 @@ def notify_logs(user=Depends(admin), s=Depends(db)):
     rows = s.scalars(select(ZaloLog).order_by(ZaloLog.id.desc()).limit(100)).all()
     return {"logs": [{"at": local(r.ts).strftime("%d/%m/%Y %H:%M:%S"), "to": r.to, "text": r.text, "ok": r.ok,
                       "error": r.error} for r in rows]}
+
+
+# ---------------------------------------------------------------- tivi
+@app.get("/cai-dat/tivi", response_class=HTMLResponse)
+def tv_page(request: Request, user=Depends(admin)):
+    return templates.TemplateResponse(request, "settings_tv.html", _nav(request, "tivi"))
+
+
+def _tv_public(c):
+    return {**{k: v for k, v in c.items() if k != "token"}, "paired": bool(c["token"])}
+
+
+@app.get("/api/tv/settings")
+def tv_settings(request: Request, user=Depends(admin), s=Depends(db)):
+    c = settings.get(s, "tv")
+    if not c["dashboard_url"] and request.url.hostname not in ("localhost", "127.0.0.1", "testserver"):
+        c["dashboard_url"] = f"{request.base_url}tv?sound=1"   # mở trang này bằng IP LAN thì tự điền đúng
+    return _tv_public(c)
+
+
+@app.post("/api/tv/settings")
+async def tv_settings_save(request: Request, user=Depends(admin), s=Depends(db)):
+    try:
+        b = await request.json()
+        assert isinstance(b, dict)
+    except Exception:  # noqa: BLE001
+        return _bad("Dữ liệu không hợp lệ")
+    import ipaddress
+    import re
+    ip = str(b.get("ip") or "").strip()
+    try:
+        if ip:
+            ipaddress.ip_address(ip)
+    except ValueError:
+        return _bad("IP tivi không đúng")
+    daily = str(b.get("daily_time") or "").strip()
+    if daily and not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", daily):
+        return _bad("Giờ mở hằng ngày dạng HH:MM, vd 07:00")
+    try:
+        wait = max(3, min(int(b.get("wait_seconds") or 10), 60))
+    except (TypeError, ValueError):
+        wait = 10
+    old = settings.get(s, "tv")
+    new = {"enabled": bool(b.get("enabled")), "ip": ip, "mac": str(b.get("mac") or "").strip().upper(),
+           "broadcast": str(b.get("broadcast") or "").strip(), "dashboard_url": str(b.get("dashboard_url") or "").strip(),
+           "wait_seconds": wait, "daily_time": daily, "wake_daily": bool(b.get("wake_daily")),
+           "on_power": bool(b.get("on_power")), "keep_open": bool(b.get("keep_open"))}
+    if ip != old["ip"]:
+        new["token"] = ""                  # tivi khác -> phải bấm Cho phép lại
+    return _tv_public(settings.put(s, "tv", new, user))
+
+
+@app.get("/api/tv/status")
+def tv_status(user=Depends(admin), s=Depends(db)):
+    c = settings.get(s, "tv")
+    if not c["ip"]:
+        return {"state": "chưa cấu hình"}
+    d = tv_remote.info(c["ip"])
+    dev = (d or {}).get("device") or {}
+    return {"state": tv_remote.power_state(c["ip"]), "name": dev.get("name") or (d or {}).get("name", ""),
+            "model": dev.get("modelName", ""), "browser": tv_remote.browser_visible(c["ip"]),
+            "mac": tv_remote.find_mac(c["ip"]) if d else "", "paired": bool(c["token"])}
+
+
+@app.post("/api/tv/do/{action}")
+def tv_do(action: str, user=Depends(admin), s=Depends(db)):
+    c = settings.get(s, "tv")
+    if not c["ip"]:
+        return _bad("Chưa lưu IP tivi")
+    try:
+        if action == "open":
+            tv_auto.open_dashboard(s, c)
+            return {"ok": True, "msg": "Đã mở dashboard và bấm OK bật âm thanh"}
+        if action == "wake":
+            if not c["mac"]:
+                return _bad("Chưa có MAC tivi (bấm Kiểm tra tivi để tự lấy, rồi Lưu)")
+            tv_remote.wake(c["mac"], c["ip"], c["broadcast"])
+            return {"ok": True, "msg": "Đã gửi lệnh bật. Tivi lên sau khoảng 5–15 giây"}
+        key = {"off": "power", "enter": "enter", "vol_up": "vol_up", "vol_down": "vol_down", "mute": "mute",
+               "home": "home", "back": "back", "pair": None}.get(action, "missing")
+        if key == "missing":
+            return _bad("Lệnh không hợp lệ", 404)
+        if action == "off" and tv_remote.power_state(c["ip"]) != "on":
+            return {"ok": True, "msg": "Tivi đang tắt"}
+        token = tv_remote.run(c["ip"], c["token"], [("key", tv_remote.KEYS[key])] if key else [])
+        if token and token != c["token"]:
+            settings.put(s, "tv", {"token": token}, "tivi")
+        return {"ok": True, "msg": "Đã kết nối tivi" if action == "pair" else "Đã gửi lệnh"}
+    except tv_remote.TvError as e:
+        return _bad(str(e))
 
 
 @app.get("/cai-dat/am-thanh", response_class=HTMLResponse)
