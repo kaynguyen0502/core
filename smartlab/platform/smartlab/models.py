@@ -60,6 +60,7 @@ class Reading(Base):
     ts: Mapped[datetime] = mapped_column(DateTime)                      # UTC
     metric: Mapped[str] = mapped_column(String(16))                     # temperature | humidity | ec
     value: Mapped[float] = mapped_column(Float)
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False)     # số đo giả lập (chỉ đánh dấu trong CSDL)
     __table_args__ = (Index("ix_readings_point_metric_ts", "point_id", "metric", "ts"),)
 
 
@@ -106,6 +107,7 @@ class LogEntry(Base):
     ec: Mapped[float | None] = mapped_column(Float, nullable=True)
     status: Mapped[str] = mapped_column(String(16))                     # dat | khong_dat | khong_du_lieu
     note: Mapped[str] = mapped_column(String(255), default="")
+    simulated: Mapped[bool] = mapped_column(Boolean, default=False)     # lấy từ số đo giả lập
     __table_args__ = (UniqueConstraint("point_id", "slot", name="uq_log_point_slot"),)
 
 

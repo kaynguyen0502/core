@@ -480,26 +480,44 @@ def test_tv_settings_api(session, monkeypatch):
     assert settings.get(session, "tv")["token"] == ""
 
 
-def test_simulated_ro_values_flagged_and_cleared(session):
+def test_simulated_values_hidden_flagged_in_db_and_deletable(session):
     from fastapi.testclient import TestClient
     from smartlab import records, web
-    from smartlab.models import LogEntry
+    from smartlab.models import LogEntry, Reading
+    from tools import xoa_gia_lap
     c = TestClient(web.app)
-    assert "Giả lập số đo" in c.get("/cai-dat/gia-lap", headers=AUTH).text
     r = c.post("/cai-dat/gia-lap", headers=AUTH, data={"v_RO01": "0,08", "v_RO02": "0.00", "v_RO03": "0.1"},
                follow_redirects=False)
     assert "3" in r.headers["location"]
     pts = {p["code"]: p for p in c.get("/api/status").json()["points"]}
     assert pts["RO01"]["display"] == "0,08" and pts["RO02"]["display"] == "0,00" and pts["RO03"]["display"] == "0,10"
-    assert pts["RO01"]["extra"]["simulated"] is True and pts["RO01"]["state"] == "ok"
+    assert "GIẢ LẬP" not in c.get("/tv").text
     session.expire_all()
-    slot = service.utcnow().replace(second=0, microsecond=0)
-    records.record_slot(session, slot)
+    _send(session, "smartlab/hs/ro01", '{"ec": 0.5}', service.utcnow() - timedelta(minutes=40))   # 1 số đo thật cũ
+    records.record_slot(session, service.utcnow().replace(microsecond=0))
     e = session.query(LogEntry).join(Point).filter(Point.code == "RO01").one()
-    assert e.ec == 0.08 and "giả lập" in e.note
-    _send(session, "smartlab/hs/ro01", '{"ec": 0.5}', service.utcnow())            # số đo thật -> bỏ dấu
-    pts = {p["code"]: p for p in c.get("/api/status").json()["points"]}
-    assert pts["RO01"]["extra"]["simulated"] is False
-    c.post("/cai-dat/gia-lap", headers=AUTH, data={"v_RO01": "abc"}, follow_redirects=False)
-    assert c.post("/cai-dat/gia-lap", headers=AUTH, data={}, follow_redirects=False).status_code == 303
-    assert {p["code"]: p for p in c.get("/api/status").json()["points"]}["RO02"]["extra"]["simulated"] is False
+    assert e.ec == 0.08 and e.simulated and e.note == ""
+    y, m = records.to_local(service.utcnow()).year, records.to_local(service.utcnow()).month
+    page = c.get(f"/so-theo-doi?month={y:04d}-{m:02d}").text
+    assert "GL" not in page and "giả lập" not in page.lower()
+    assert session.query(Reading).filter(Reading.simulated.is_(True)).count() == 3
+    assert xoa_gia_lap.main([]) == 1                                    # chỉ đếm
+    assert xoa_gia_lap.main(["--yes"]) == 0
+    session.expire_all()
+    assert session.query(Reading).filter(Reading.simulated.is_(True)).count() == 0
+    assert session.query(Reading).count() == 1                          # số đo thật còn nguyên
+    assert session.query(LogEntry).filter(LogEntry.simulated.is_(True)).count() == 0
+    from smartlab import settings
+    assert settings.get(session, "simulate")["values"] == {}
+
+
+def test_init_db_adds_new_columns_to_old_tables(tmp_path):
+    from sqlalchemy import create_engine, inspect, text
+    eng = create_engine(f"sqlite:///{tmp_path}/old.db")
+    with eng.begin() as cn:
+        cn.execute(text("CREATE TABLE readings (id INTEGER PRIMARY KEY, point_id INT, ts DATETIME, metric VARCHAR(16), value FLOAT)"))
+        cn.execute(text("INSERT INTO readings (point_id, ts, metric, value) VALUES (1, '2026-11-01', 'ec', 0.5)"))
+    db.init_db(eng)
+    assert "simulated" in {c["name"] for c in inspect(eng).get_columns("readings")}
+    with eng.connect() as cn:
+        assert cn.execute(text("SELECT simulated FROM readings")).scalar() == 0

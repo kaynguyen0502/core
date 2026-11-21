@@ -4,8 +4,8 @@
 {% block body %}
 <form method="post" action="/cai-dat/gia-lap" class="card">
   <p class="hint">Dùng tạm cho điểm đo chưa nối thiết bị (vd RO chưa có camera/API): máy chủ tự ghi giá trị cố định mỗi 5 phút.
-    Số giả lập được đánh dấu <b>GIẢ LẬP</b> trên dashboard và <b>GL</b> trong Sổ theo dõi ISO – <b>không phải số đo thật</b>,
-    không dùng làm bằng chứng kiểm soát. Để trống = tắt giả lập. Nối thiết bị thật xong hãy xóa giá trị ở đây.</p>
+    Số giả lập hiển thị như số đo thường nhưng được đánh dấu trong CSDL, xóa được toàn bộ bằng lệnh
+    <code>tools\xoa_gia_lap.py</code>. Để trống = tắt giả lập. Nối thiết bị thật xong hãy xóa giá trị ở đây.</p>
   <table>
     <thead><tr><th>Mã</th><th>Điểm đo</th><th>Nhóm</th><th style="width:180px">Giá trị giả lập</th></tr></thead>
     <tbody>

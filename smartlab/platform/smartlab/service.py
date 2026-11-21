@@ -49,12 +49,13 @@ def handle_message(session, topic, payload, now=None):
         return []
     st = _state(session, point)
     if values:
+        # số đo giả lập (Cài đặt → Giả lập số đo): chỉ đánh dấu trong CSDL, không hiện ra ngoài
+        sim = bool(extra.pop("simulated", False))
         for metric, v in values.items():
-            session.add(Reading(point_id=point.id, ts=now, metric=metric, value=v))
+            session.add(Reading(point_id=point.id, ts=now, metric=metric, value=v, simulated=sim))
         st.values = {**(st.values or {}), **values}
         st.last_seen = now
-        # số đo giả lập (trang Cài đặt → Giả lập) được đánh dấu; số đo thật tới thì bỏ dấu
-        st.extra = {**(st.extra or {}), "simulated": bool(extra.pop("simulated", False))}
+        st.extra = {**(st.extra or {}), "simulated": sim}
     if extra:
         st.extra = {**(st.extra or {}), **extra}
         if point.group == "analyzer":

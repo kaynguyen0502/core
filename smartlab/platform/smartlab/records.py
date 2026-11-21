@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from . import alarms, config
-from .models import GROUPS, LogEntry, Point, PointState, Reading
+from .models import GROUPS, LogEntry, Point, Reading
 
 TZ = ZoneInfo(config.TIMEZONE)
 WINDOW_BEFORE = timedelta(minutes=30)
@@ -59,6 +59,14 @@ def _nearest(session, point_id, metric, slot):
     return min(rows, key=lambda r: abs(r[0] - slot))[1]
 
 
+def _nearest_simulated(session, point_id, slot):
+    rows = session.execute(
+        select(Reading.ts, Reading.simulated).where(
+            Reading.point_id == point_id, Reading.ts >= slot - WINDOW_BEFORE, Reading.ts <= slot + WINDOW_AFTER)
+    ).all()
+    return bool(rows) and bool(min(rows, key=lambda r: abs(r[0] - slot))[1])
+
+
 def record_slot(session, slot_utc):
     """Ghi sổ mọi điểm đo cảm biến tại một mốc (UTC). Bỏ qua điểm đã ghi. Trả về số dòng mới."""
     done = set(session.scalars(select(LogEntry.point_id).where(LogEntry.slot == slot_utc)))
@@ -75,10 +83,8 @@ def record_slot(session, slot_utc):
             status = "khong_dat" if level == "out" else "dat"
             if level != "out":
                 note = ""
-        st = session.scalar(select(PointState).where(PointState.point_id == p.id))
-        if present and st is not None and (st.extra or {}).get("simulated"):
-            note = ("Giá trị giả lập. " + note).strip()
-        session.add(LogEntry(point_id=p.id, slot=slot_utc, status=status, note=note[:255], **vals))
+        sim = bool(present) and _nearest_simulated(session, p.id, slot_utc)
+        session.add(LogEntry(point_id=p.id, slot=slot_utc, status=status, note=note[:255], simulated=sim, **vals))
         added += 1
     session.commit()
     return added

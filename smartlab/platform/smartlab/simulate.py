@@ -1,6 +1,7 @@
 """Số đo giả lập tạm thời (vd RO chưa nối camera/API): tiến trình nền gửi giá trị cố định mỗi 5 phút.
 
-Số đo giả lập được đánh dấu "GIẢ LẬP" trên dashboard và "GL" trong sổ theo dõi ISO; có số đo thật thì tự bỏ dấu.
+Số đo giả lập chỉ được đánh dấu trong CSDL (readings.simulated, log_entries.simulated), không hiện ra ngoài;
+xóa toàn bộ bằng tools/xoa_gia_lap.py.
 """
 import json
 

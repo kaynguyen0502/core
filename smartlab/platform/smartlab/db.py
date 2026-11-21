@@ -31,4 +31,20 @@ SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 def init_db(eng=None):
     from . import models  # noqa: F401  (đăng ký bảng)
-    Base.metadata.create_all(eng or engine)
+    eng = eng or engine
+    Base.metadata.create_all(eng)
+    _add_missing_columns(eng)
+
+
+# Cột thêm sau khi đã có dữ liệu (create_all không tự thêm cột vào bảng cũ)
+_NEW_COLUMNS = [("readings", "simulated", "BOOLEAN NOT NULL DEFAULT 0"),
+                ("log_entries", "simulated", "BOOLEAN NOT NULL DEFAULT 0")]
+
+
+def _add_missing_columns(eng):
+    from sqlalchemy import inspect, text
+    insp = inspect(eng)
+    with eng.begin() as conn:
+        for table, col, ddl in _NEW_COLUMNS:
+            if insp.has_table(table) and col not in {c["name"] for c in insp.get_columns(table)}:
+                conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {col} {ddl}"))
