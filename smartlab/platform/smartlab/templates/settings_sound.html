@@ -2,7 +2,7 @@
 {% block title %}Âm thanh & giọng đọc{% endblock %}
 {% block heading %}Âm thanh &amp; giọng đọc cảnh báo{% endblock %}
 {% block body %}
-<form method="post" action="/cai-dat/am-thanh" class="card">
+<form method="post" action="/cai-dat/am-thanh" class="card" enctype="multipart/form-data">
   <h2>1. Chuông báo trên màn hình dashboard (tivi)</h2>
   <label class="inline"><input type="checkbox" name="default_on" value="1" {{ 'checked' if c.default_on }}>
     Mọi màn hình dashboard tự hỏi bật âm thanh khi mở (không cần thêm <code>?sound=1</code> vào địa chỉ)</label>
@@ -24,13 +24,21 @@
   <h2>2. Giọng đọc tiếng Việt</h2>
   <label class="inline"><input type="radio" name="voice" value="off" {{ 'checked' if c.voice == 'off' }}> Tắt – chỉ phát chuông</label>
   <label class="inline"><input type="radio" name="voice" value="browser" {{ 'checked' if c.voice == 'browser' }}> Giọng có sẵn của trình duyệt (tivi Samsung thường KHÔNG có giọng tiếng Việt)</label>
-  <label class="inline"><input type="radio" name="voice" value="fpt" {{ 'checked' if c.voice == 'fpt' }}> Giọng FPT.AI – tạo sẵn file mp3 trên máy chủ, tivi nào cũng phát được (khuyên dùng)</label>
+  <label class="inline"><input type="radio" name="voice" value="google" {{ 'checked' if c.voice == 'google' }}> Giọng Google Cloud Chirp 3 HD – tự nhiên nhất, tạo sẵn file mp3 trên máy chủ (khuyên dùng)</label>
+  <div class="row">
+    <label>File khóa Google Cloud (JSON service account)
+      <input type="file" name="google_file" accept=".json,application/json">
+      <span class="hint">{{ ('Đã lưu khóa của ' ~ google_account ~ ' – chọn file mới nếu muốn đổi') if google_account else 'Dự án Google Cloud phải bật "Cloud Text-to-Speech API"' }}</span></label>
+    <label>Giọng Google
+      <select name="google_voice">{% for k, v in google_voices.items() %}<option value="{{ k }}" {{ 'selected' if c.google_voice == k }}>{{ v }}</option>{% endfor %}</select></label>
+  </div>
+  <label class="inline"><input type="radio" name="voice" value="fpt" {{ 'checked' if c.voice == 'fpt' }}> Giọng FPT.AI – tạo sẵn file mp3 trên máy chủ</label>
   <div class="row">
     <label>API key FPT.AI
       <input type="password" name="fpt_key" autocomplete="off" placeholder="{{ ('Đã lưu ' ~ key_mask ~ ' – để trống nếu không đổi') if key_mask else 'Lấy tại console.fpt.ai → Text to Speech' }}"></label>
     <label>Giọng
       <select name="fpt_voice">{% for k, v in voices.items() %}<option value="{{ k }}" {{ 'selected' if c.fpt_voice == k }}>{{ v }}</option>{% endfor %}</select></label>
-    <label>Tốc độ đọc
+    <label>Tốc độ đọc (mọi giọng)
       <select name="speed">{% for v, t in [(-2,'Chậm'),(-1,'Hơi chậm'),(0,'Bình thường'),(1,'Hơi nhanh'),(2,'Nhanh')] %}<option value="{{ v }}" {{ 'selected' if c.speed == v }}>{{ t }}</option>{% endfor %}</select></label>
   </div>
   <label>Câu đọc khi vượt ngưỡng <span class="hint">({ten} = tên điểm đo, {ma} = mã điểm)</span>
@@ -43,7 +51,7 @@
   {% if sample_text %}<p class="hint">Ví dụ với {{ sample_code }}: “{{ sample_text }}”</p>{% endif %}
   <div style="display:flex;gap:8px;flex-wrap:wrap">
     <button type="submit">Lưu cấu hình</button>
-    <button type="button" class="sec" id="build">Tạo file giọng đọc FPT.AI ({{ ready }}/{{ total }} đã có)</button>
+    <button type="button" class="sec" id="build">Tạo file giọng đọc ({{ ready }}/{{ total }} đã có)</button>
     <button type="button" class="sec" id="listen">Nghe thử trên máy này</button>
   </div>
   <div class="out" id="out"></div>
@@ -74,7 +82,7 @@ document.getElementById("listen").onclick = async () => {
   const wait = (t - ctx.currentTime + 0.3) * 1000;
   const first = Object.values(c.clips)[0];
   setTimeout(() => {
-    if (c.voice === "fpt") {
+    if (c.voice === "fpt" || c.voice === "google") {
       if (first && first.alarm) new Audio(first.alarm).play();
       else show("out", "Chưa có file giọng đọc: bấm Lưu rồi Tạo file giọng đọc.", false);
     } else if (c.voice === "browser" && window.speechSynthesis) {

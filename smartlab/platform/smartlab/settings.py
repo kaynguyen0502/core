@@ -25,7 +25,9 @@ DEFAULTS = {
         "repeat_minutes": 5,
         "mute_minutes": 30,
         "offline_chime": True,
-        "voice": "off",                   # off | browser | fpt
+        "voice": "off",                   # off | browser | fpt | google
+        "google_credentials": "",         # nội dung file JSON service account Google Cloud
+        "google_voice": "vi-VN-Chirp3-HD-Despina",
         "fpt_key": "",
         "fpt_voice": "myan",
         "speed": 0,                       # -3 (chậm) .. 3 (nhanh)
@@ -33,10 +35,16 @@ DEFAULTS = {
         "offline_text": "Chú ý. {ten} mất tín hiệu.",
     },
 }
-SECRETS = {"zalo": ("api_key",), "sound": ("fpt_key",)}
+SECRETS = {"zalo": ("api_key",), "sound": ("fpt_key", "google_credentials")}
 # loại sự kiện -> công tắc trên trang cấu hình Zalo
 KIND_SWITCH = {"alarm": "on_alarm", "reminder": "on_alarm", "normal": "on_alarm_end",
                "offline": "on_offline", "online": "on_offline"}
+# Google Cloud Text-to-Speech – Chirp 3 HD (giọng tự nhiên), tiếng Việt: vi-VN-Chirp3-HD-<Tên>
+GOOGLE_VOICES = {f"vi-VN-Chirp3-HD-{n}": f"{n} – {g}" for g, names in (
+    ("nữ", ("Despina", "Aoede", "Kore", "Leda", "Zephyr", "Achernar", "Autonoe", "Callirrhoe", "Erinome", "Gacrux",
+            "Laomedeia", "Pulcherrima", "Sulafat", "Vindemiatrix")),
+    ("nam", ("Charon", "Fenrir", "Orus", "Puck", "Achird", "Algenib", "Algieba", "Alnilam", "Enceladus", "Iapetus",
+             "Rasalgethi", "Sadachbia", "Sadaltager", "Schedar", "Umbriel", "Zubenelgenubi"))) for n in names}
 FPT_VOICES = {"myan": "Mỹ An – nữ miền Trung", "giahuy": "Gia Huy – nam miền Trung",
               "ngoclam": "Ngọc Lam – nữ miền Trung", "banmai": "Ban Mai – nữ miền Bắc",
               "thuminh": "Thu Minh – nữ miền Bắc", "leminh": "Lê Minh – nam miền Bắc",

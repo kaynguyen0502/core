@@ -342,3 +342,51 @@ def test_settings_pages_sound_api_and_tts_cache(session, tmp_path, monkeypatch):
     url = s["clips"]["SH19-M"]["alarm"]
     assert c.get(url).content == b"ID3fake"
     assert c.get("/audio/../../.env").status_code == 404
+
+
+def _fake_sa():
+    import json as _json
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+    k = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    pem = k.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                          serialization.NoEncryption()).decode()
+    return _json.dumps({"type": "service_account", "client_email": "tts@demo.iam.gserviceaccount.com",
+                        "private_key": pem, "token_uri": "https://oauth2.googleapis.com/token"})
+
+
+def test_google_tts_upload_build_and_token(session, tmp_path, monkeypatch):
+    import base64 as b64
+    from fastapi.testclient import TestClient
+    from smartlab import config, tts, web
+    monkeypatch.setattr(config, "AUDIO_DIR", str(tmp_path))
+    sa = _fake_sa()
+    c = TestClient(web.app)
+    r = c.post("/cai-dat/am-thanh", headers=AUTH, files={"google_file": ("key.json", sa.encode(), "application/json")},
+               data={"voice": "google", "google_voice": "vi-VN-Chirp3-HD-Despina", "alarm_text": "Cảnh báo {ma} {ten}",
+                     "offline_text": ""}, follow_redirects=False)
+    assert r.status_code == 303 and "msg=File" not in r.headers["location"]
+    page = c.get("/cai-dat/am-thanh", headers=AUTH).text
+    assert "tts@demo.iam.gserviceaccount.com" in page and "PRIVATE KEY" not in page
+    assert "google_credentials" not in c.get("/api/sound").json()
+    calls = []
+
+    class FakeHttp:
+        def post(self, url, data=None, json=None, headers=None, timeout=None):
+            calls.append(url)
+            if "oauth2" in url:
+                assert data["grant_type"].endswith("jwt-bearer") and data["assertion"].count(".") == 2
+                return _Resp(200, {"access_token": "AT"})
+            assert headers["Authorization"] == "Bearer AT" and json["voice"]["name"] == "vi-VN-Chirp3-HD-Despina"
+            return _Resp(200, {"audioContent": b64.b64encode(b"ID3google").decode()})
+    monkeypatch.setattr(tts, "httpx", type("M", (), {"post": FakeHttp().post, "HTTPError": Exception, "Client": None}))
+    tts._google_token.update(value="", exp=0, who="")
+    d = c.post("/cai-dat/am-thanh/tao-giong", headers=AUTH).json()
+    assert d["ok"] and d["made"] == 21, d                    # có {ma} nên 21 câu khác nhau
+    assert calls.count("https://oauth2.googleapis.com/token") == 1   # token dùng lại
+    url = c.get("/api/sound").json()["clips"]["SH25-M"]["alarm"]
+    assert c.get(url).content == b"ID3google"
+    bad = c.post("/cai-dat/am-thanh", headers=AUTH, files={"google_file": ("x.json", b"not json", "application/json")},
+                 data={"voice": "google"}, follow_redirects=False)
+    from urllib.parse import unquote
+    assert "không đúng" in unquote(bad.headers["location"])

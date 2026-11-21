@@ -247,7 +247,7 @@ const Sound = {
   fill(tpl, p) { return (tpl || "").replace(/\{ten\}/g, p.name).replace(/\{ma\}/g, p.code); },
   voice(points, kind, delay) {
     const c = this.cfg;
-    if (c.voice === "fpt") this.playClips(points.map(p => ((c.clips || {})[p.code] || {})[kind]).filter(Boolean), delay);
+    if (c.voice === "fpt" || c.voice === "google") this.playClips(points.map(p => ((c.clips || {})[p.code] || {})[kind]).filter(Boolean), delay);
     if (c.voice === "browser") this.say(points.map(p => this.fill(kind === "alarm" ? c.alarm_text : c.offline_text, p)
       + (kind === "alarm" && p.message ? " " + p.message : "")).join(". "), delay);
   },

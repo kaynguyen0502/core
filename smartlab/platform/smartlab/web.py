@@ -346,6 +346,7 @@ def sound_page(request: Request, msg: str = "", user=Depends(admin), s=Depends(d
     sample = next(iter(want.items()), None)
     return templates.TemplateResponse(request, "settings_sound.html", {
         **_nav(request, "am-thanh"), "c": c, "key_mask": settings.mask(c["fpt_key"]), "voices": settings.FPT_VOICES,
+        "google_voices": settings.GOOGLE_VOICES, "google_account": tts.google_account(c["google_credentials"]),
         "total": total, "ready": ready, "msg": msg, "dups": tts.duplicates(s),
         "sample_code": sample[0] if sample else "", "sample_text": sample[1]["alarm"][0] if sample and sample[1] else ""})
 
@@ -359,7 +360,15 @@ async def sound_save(request: Request, user=Depends(admin), s=Depends(db)):
             return max(lo, min(int(f.get(name) or default), hi))
         except ValueError:
             return default
-    voice = f.get("voice") if f.get("voice") in ("off", "browser", "fpt") else "off"
+    voice = f.get("voice") if f.get("voice") in ("off", "browser", "fpt", "google") else "off"
+    gvoice = f.get("google_voice") if f.get("google_voice") in settings.GOOGLE_VOICES else "vi-VN-Chirp3-HD-Despina"
+    creds = ""
+    up = f.get("google_file")
+    if up is not None and hasattr(up, "read"):
+        creds = (await up.read()).decode("utf-8-sig", "replace").strip()
+    creds = creds or (f.get("google_json") or "").strip()
+    if creds and not tts.google_account(creds):
+        return RedirectResponse("/cai-dat/am-thanh?msg=File khóa Google không đúng định dạng JSON service account", status_code=303)
     fpt_voice = f.get("fpt_voice") if f.get("fpt_voice") in settings.FPT_VOICES else "myan"
     settings.put(s, "sound", {
         "default_on": f.get("default_on") == "1",
@@ -369,6 +378,7 @@ async def sound_save(request: Request, user=Depends(admin), s=Depends(db)):
         "mute_minutes": num("mute_minutes", 5, 240, 30),
         "offline_chime": f.get("offline_chime") == "1",
         "voice": voice, "fpt_key": (f.get("fpt_key") or "").strip(), "fpt_voice": fpt_voice,
+        "google_credentials": creds, "google_voice": gvoice,
         "speed": num("speed", -3, 3, 0),
         "alarm_text": (f.get("alarm_text") or "").strip()[:200],
         "offline_text": (f.get("offline_text") or "").strip()[:200],
@@ -387,7 +397,8 @@ def api_sound(s=Depends(db)):
     """Cấu hình âm thanh cho màn hình dashboard (không kèm khóa bí mật) + các file giọng đọc đã có."""
     c = settings.get(s, "sound")
     c.pop("fpt_key", None)
-    return {**c, "clips": tts.clips(s) if c["voice"] == "fpt" else {}}
+    c.pop("google_credentials", None)
+    return {**c, "clips": tts.clips(s) if c["voice"] in ("fpt", "google") else {}}
 
 
 @app.get("/audio/{name}")
