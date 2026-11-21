@@ -64,7 +64,9 @@
 document.getElementById("build").onclick = async () => {
   show("out", "Đang tạo file giọng đọc, chờ 1–2 phút…", true);
   const d = await post("/cai-dat/am-thanh/tao-giong");
-  show("out", `Tạo mới ${d.made} file, đã có ${d.have} file.` + (d.errors.length ? "<br>Lỗi: " + d.errors.map(esc).join("<br>") : ""), d.ok);
+  const total = d.made + d.have;
+  document.getElementById("build").textContent = `Tạo file giọng đọc (${total}/{{ total }} đã có)`;
+  show("out", `Tạo mới ${d.made} file, đã có ${d.have} file.` + (d.errors.length ? "<br>Lỗi: " + d.errors.map(esc).join("<br>") + "<br>Bấm Tạo file giọng đọc lần nữa để làm tiếp phần còn thiếu." : " Đã đủ."), d.ok);
 };
 document.getElementById("listen").onclick = async () => {
   const c = await (await fetch("/api/sound", {cache: "no-store"})).json();

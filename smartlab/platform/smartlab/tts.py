@@ -86,7 +86,13 @@ def google_tts(text, creds_json, voice, speed=0, client=None):
             "audioConfig": {"audioEncoding": "MP3"}}
     if GOOGLE_RATE.get(speed, 1.0) != 1.0:
         body["audioConfig"]["speakingRate"] = GOOGLE_RATE[speed]
-    r = (client or httpx).post(GOOGLE_TTS_URL, json=body, headers={"Authorization": "Bearer " + token}, timeout=40)
+    for attempt in range(4):
+        r = (client or httpx).post(GOOGLE_TTS_URL, json=body, headers={"Authorization": "Bearer " + token}, timeout=40)
+        # vừa bật API: vài phút đầu Google lúc nhận lúc báo 403 -> chờ rồi thử lại
+        if r.status_code == 403 and "has not been used" in r.text and attempt < 3:
+            time.sleep(10)
+            continue
+        break
     if r.status_code != 200:
         try:
             msg = r.json()["error"]["message"]
