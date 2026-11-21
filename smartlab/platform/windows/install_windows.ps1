@@ -420,10 +420,12 @@ Step "Đăng ký dịch vụ Windows (tự chạy khi bật máy, tự khởi đ
 function Install-SmartLabService($name, $exe, $params, $dir, [string[]]$deps) {
     & nssm status $name *> $null
     if ($LASTEXITCODE -eq 0) {
+        # Dịch vụ đã có: chỉ cập nhật thông số, KHÔNG xóa -> giữ tài khoản chạy dịch vụ đã đặt tay (vd .\Roche)
         & nssm stop $name *> $null
-        & nssm remove $name confirm *> $null
+        Run "nssm" @("set", $name, "Application", $exe)
+    } else {
+        Run "nssm" @("install", $name, $exe)
     }
-    Run "nssm" @("install", $name, $exe)
     Run "nssm" @("set", $name, "AppParameters", $params)
     Run "nssm" @("set", $name, "AppDirectory", $dir)
     Run "nssm" @("set", $name, "Start", "SERVICE_AUTO_START")
