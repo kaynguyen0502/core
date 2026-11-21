@@ -57,7 +57,13 @@ footer a{color:#9fc1ff}
 .btns button,.btns a{font:inherit;font-size:15px;padding:8px 14px;border-radius:8px;border:1px solid var(--line);background:#16243a;color:#dbe4f0;cursor:pointer;text-decoration:none;min-height:40px;box-sizing:border-box}
 .btns button.on{background:#1d5fd1;border-color:#1d5fd1;color:#fff}
 .stats{display:flex;gap:18px;flex-wrap:wrap;color:var(--mute);font-size:15px}.stats b{color:var(--ink)}
-.chart{background:#0d1524;border-radius:12px;padding:8px}.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
+.chart{background:#0d1524;border-radius:12px;padding:8px}
+.snd{font:inherit;font-size:15px;font-weight:700;padding:7px 12px;border-radius:999px;border:1px solid var(--line);background:#16243a;color:#cfe0f5;cursor:pointer;margin-top:6px}
+.snd.on{background:var(--okbg);color:var(--ok);border-color:#1f6b4c}.snd:focus{outline:3px solid #5b8def;outline-offset:2px}
+.banner .mute{margin-left:12px;font:inherit;font-size:17px;font-weight:700;padding:6px 14px;border-radius:8px;border:0;background:#ffe1e1;color:#3a0f14;cursor:pointer}
+.gate{position:fixed;inset:0;background:rgba(3,7,14,.8);display:none;align-items:center;justify-content:center;z-index:20}
+.gate.on{display:flex}.gate button{font:inherit;font-size:30px;font-weight:800;padding:24px 40px;border-radius:16px;border:0;background:#1d5fd1;color:#fff;cursor:pointer}
+.gate button:focus{outline:4px solid #fff;outline-offset:4px}.lg i{width:14px;height:14px;border-radius:4px;display:inline-block}
 </style>
 </head>
 <body>
@@ -65,7 +71,7 @@ footer a{color:#9fc1ff}
   <header>
     <div class="brand"><b>SmartLab</b><div>{{ site }}</div></div>
     <div class="chips" id="chips"></div>
-    <div class="clock"><b id="clock">--:--</b><div id="date"></div></div>
+    <div class="clock"><b id="clock">--:--</b><div id="date"></div><button type="button" class="snd" id="snd" aria-pressed="false">Âm thanh: TẮT</button></div>
   </header>
   <div class="banner" id="banner" role="alert"></div>
   <div class="main">
@@ -97,6 +103,7 @@ footer a{color:#9fc1ff}
     <span style="margin-left:auto" id="updated"></span>
   </footer>
 </div>
+<div class="gate" id="gate"><button type="button" id="gateBtn">Bấm OK để bật âm thanh cảnh báo</button></div>
 <div class="ov" id="ov" role="dialog" aria-modal="true" aria-labelledby="ovTitle">
   <div class="dlg">
     <div class="row"><h3 id="ovTitle"></h3><div class="btns"><button type="button" id="ovClose">Đóng</button></div></div>
@@ -147,6 +154,87 @@ function xn(p) {
     <div><span>TAT trung vị</span><b>${e.tat_median_min != null ? esc(e.tat_median_min) + " phút" : "—"}</b></div><div><span>IQC hôm nay</span><b>${esc(e.iqc ?? "—")}</b></div></div></div>`;
 }
 
+// ---------------------------------------------------------------- âm thanh cảnh báo (tivi / máy trực)
+// Trình duyệt chỉ cho phát tiếng sau khi người dùng bấm 1 lần -> nút "Âm thanh" / màn "Bấm OK".
+// Vượt ngưỡng: chuông 3 hồi + đọc tên điểm (nếu tivi có giọng tiếng Việt), nhắc lại mỗi 5 phút tới khi hết.
+// Mất tín hiệu: 1 tiếng chuông nhẹ, chỉ 1 lần cho mỗi điểm.
+const Sound = {
+  enabled: false, ctx: null, mutedUntil: 0, alarmSet: new Set(), offSet: new Set(), lastPlay: 0, first: true,
+  REPEAT_MS: 5 * 60 * 1000, MUTE_MS: 30 * 60 * 1000,
+  store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} },
+  load(k) { try { return localStorage.getItem(k); } catch (e) { return null; } },
+  init() {
+    const q = new URLSearchParams(location.search).get("sound");
+    if (q === "1") this.store("smartlab_sound", "1");
+    if (q === "0") this.store("smartlab_sound");
+    if (this.load("smartlab_sound") === "1") document.getElementById("gate").classList.add("on");
+    setTimeout(() => document.getElementById("gate").classList.contains("on") && document.getElementById("gateBtn").focus(), 300);
+  },
+  unlock() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return false;
+    this.ctx = this.ctx || new AC();
+    if (this.ctx.state === "suspended") this.ctx.resume();
+    return true;
+  },
+  set(on) {
+    this.enabled = on && this.unlock();
+    this.store("smartlab_sound", this.enabled ? "1" : undefined);
+    const btn = document.getElementById("snd");
+    btn.textContent = this.enabled ? "Âm thanh: BẬT" : "Âm thanh: TẮT";
+    btn.classList.toggle("on", this.enabled); btn.setAttribute("aria-pressed", String(this.enabled));
+    document.getElementById("gate").classList.remove("on");
+    if (this.enabled) { this.tone([[660, .18], [0, .08], [880, .25]]); this.lastPlay = 0; this.first = true; refresh(); }
+  },
+  tone(seq, vol = 0.5) {
+    if (!this.ctx) return;
+    let t = this.ctx.currentTime + 0.05;
+    for (const [f, dur] of seq) {
+      if (f) {
+        const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+        o.type = "square"; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(vol, t + 0.02);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(g).connect(this.ctx.destination); o.start(t); o.stop(t + dur + 0.02);
+      }
+      t += dur;
+    }
+    return t - this.ctx.currentTime;
+  },
+  say(text, delay) {
+    const sy = window.speechSynthesis;
+    if (!sy || !sy.getVoices) return;
+    const v = sy.getVoices().find(x => /^vi/i.test(x.lang));
+    if (!v) return;                       // tivi không có giọng tiếng Việt -> chỉ phát chuông
+    const u = new SpeechSynthesisUtterance(text);
+    u.voice = v; u.lang = v.lang; u.rate = 0.95;
+    setTimeout(() => sy.speak(u), (delay || 0) * 1000);
+  },
+  alarm(points) {
+    const hi = [988, .22], lo = [740, .22], gap = [0, .12];
+    const len = this.tone([hi, lo, hi, lo, gap, hi, lo, hi, lo, gap, hi, lo, hi, lo], 0.6);
+    const names = points.map(p => `${p.name}, ${p.message}`).join(". ");
+    this.say(`Cảnh báo vượt ngưỡng. ${names}`.replace(/−/g, "âm ").replace(/…/g, " đến ").replace(/µS\/cm/g, " micro si-men").replace(/%/g, " phần trăm").replace(/≤/g, "tối đa ").replace(/°C/g, " độ C").replace(/(\d),(\d)/g, "$1 phẩy $2"), len + 0.3);
+    this.lastPlay = Date.now();
+  },
+  update(points) {
+    const alarm = points.filter(p => p.state === "alarm"), off = points.filter(p => p.state === "offline");
+    const newAlarm = alarm.filter(p => !this.alarmSet.has(p.code));
+    const newOff = off.filter(p => !this.offSet.has(p.code));
+    this.alarmSet = new Set(alarm.map(p => p.code));
+    if (!this.first) newOff.forEach(p => this.offSet.add(p.code));
+    else off.forEach(p => this.offSet.add(p.code));    // mở trang: không kêu cho điểm đã mất tín hiệu từ trước
+    for (const c of [...this.offSet]) if (!off.some(p => p.code === c)) this.offSet.delete(c);
+    const first = this.first; this.first = false;
+    if (!this.enabled || !this.ctx || Date.now() < this.mutedUntil) return;
+    if (alarm.length && (newAlarm.length || first || Date.now() - this.lastPlay >= this.REPEAT_MS)) {
+      this.alarm(newAlarm.length ? newAlarm : alarm);
+    } else if (!first && newOff.length) {
+      this.tone([[523, .25], [0, .1], [392, .4]], 0.35);
+    }
+  },
+};
+
 async function refresh() {
   try {
     const r = await fetch("/api/status", {cache: "no-store"});
@@ -166,7 +254,11 @@ async function refresh() {
     const alarms = d.active_alarms.filter(a => a.state === "alarm"), offs = d.active_alarms.filter(a => a.state === "offline");
     b.innerHTML = alarms.length ? `<b>VƯỢT NGƯỠNG</b> ${alarms.map(a => esc(a.code + " · " + a.name + ": " + a.message)).join(" | ")}`
       + (offs.length ? `<span style="margin-left:auto;font-size:17px;color:#d5dde8">${offs.map(a => esc(a.code)).join(", ")} mất tín hiệu</span>` : "") : "";
+    if (alarms.length && Sound.enabled) b.insertAdjacentHTML("beforeend", Sound.mutedUntil > Date.now()
+      ? `<span class="note" style="margin-left:12px">Đã tạm tắt tiếng tới ${new Date(Sound.mutedUntil).toLocaleTimeString("vi-VN", {timeZone: TZ, hour: "2-digit", minute: "2-digit"})}</span>`
+      : `<button type="button" class="mute" id="mute">Tạm tắt tiếng 30 phút</button>`);
     b.classList.toggle("on", alarms.length > 0);
+    Sound.update(d.points);
     document.getElementById("updated").textContent = "Cập nhật " + new Date(d.now).toLocaleTimeString("vi-VN", {timeZone: TZ});
   } catch (e) {
     document.getElementById("updated").textContent = "Mất kết nối máy chủ – đang thử lại…";
@@ -230,12 +322,21 @@ document.addEventListener("click", e => {
   if (b && ovCode) openHistory(ovCode, +b.dataset.days);
   if (e.target.id === "ovClose" || e.target.id === "ov") closeHistory();
 });
+document.getElementById("snd").addEventListener("click", () => Sound.set(!Sound.enabled));
+document.getElementById("gateBtn").addEventListener("click", () => Sound.set(true));
+document.addEventListener("click", e => {
+  if (e.target.id === "mute") { Sound.mutedUntil = Date.now() + Sound.MUTE_MS; window.speechSynthesis && speechSynthesis.cancel(); refresh(); }
+});
+if (window.speechSynthesis) speechSynthesis.getVoices();   // nạp danh sách giọng sớm
+// Giữ màn hình luôn sáng (trình duyệt hỗ trợ)
+async function keepAwake() { try { if (navigator.wakeLock) await navigator.wakeLock.request("screen"); } catch (e) {} }
+keepAwake(); document.addEventListener("visibilitychange", () => document.visibilityState === "visible" && keepAwake());
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeHistory();
   if ((e.key === "Enter" || e.key === " ") && e.target.dataset && e.target.dataset.code) { e.preventDefault(); openHistory(e.target.dataset.code, 1); }
 });
 
-refresh(); tick(); setInterval(refresh, 10000); setInterval(tick, 1000);
+Sound.init(); refresh(); tick(); setInterval(refresh, 10000); setInterval(tick, 1000);
 </script>
 </body>
 </html>
