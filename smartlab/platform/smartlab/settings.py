@@ -31,6 +31,7 @@ DEFAULTS = {
         "on_power": True,                 # tivi vừa bật -> tự mở dashboard
         "keep_open": False,               # trình duyệt bị đóng -> tự mở lại (sau 10 phút)
     },
+    "simulate": {"values": {}},           # {mã điểm: giá trị} – số đo giả lập tạm thời, gửi mỗi 5 phút
     "sound": {
         "default_on": False,              # mọi màn hình dashboard tự hỏi bật âm thanh khi mở
         "chime": "3",                     # "3" = 3 hồi, "1" = 1 hồi, "0" = không chuông (chỉ giọng đọc)
@@ -83,7 +84,7 @@ def get(session, key):
 def put(session, key, value, user="system"):
     """Lưu cấu hình. Ô bí mật để trống (hoặc còn dạng che ••••) = giữ giá trị cũ. Ghi nhật ký (không ghi bí mật)."""
     old = get(session, key)
-    new = _merge(old, value)
+    new = {**old, **value}                 # thay nguyên từng mục (danh sách / bảng giá trị gửi lên là bản đầy đủ)
     for s in SECRETS.get(key, ()):
         v = (value.get(s) or "").strip()
         if not v or v.startswith("•"):

@@ -478,3 +478,28 @@ def test_tv_settings_api(session, monkeypatch):
     c.post("/api/tv/settings", headers=AUTH, json={"ip": "192.168.103.153"})            # đổi tivi -> phải cho phép lại
     session.expire_all()
     assert settings.get(session, "tv")["token"] == ""
+
+
+def test_simulated_ro_values_flagged_and_cleared(session):
+    from fastapi.testclient import TestClient
+    from smartlab import records, web
+    from smartlab.models import LogEntry
+    c = TestClient(web.app)
+    assert "Giả lập số đo" in c.get("/cai-dat/gia-lap", headers=AUTH).text
+    r = c.post("/cai-dat/gia-lap", headers=AUTH, data={"v_RO01": "0,08", "v_RO02": "0.00", "v_RO03": "0.1"},
+               follow_redirects=False)
+    assert "3" in r.headers["location"]
+    pts = {p["code"]: p for p in c.get("/api/status").json()["points"]}
+    assert pts["RO01"]["display"] == "0,08" and pts["RO02"]["display"] == "0,00" and pts["RO03"]["display"] == "0,10"
+    assert pts["RO01"]["extra"]["simulated"] is True and pts["RO01"]["state"] == "ok"
+    session.expire_all()
+    slot = service.utcnow().replace(second=0, microsecond=0)
+    records.record_slot(session, slot)
+    e = session.query(LogEntry).join(Point).filter(Point.code == "RO01").one()
+    assert e.ec == 0.08 and "giả lập" in e.note
+    _send(session, "smartlab/hs/ro01", '{"ec": 0.5}', service.utcnow())            # số đo thật -> bỏ dấu
+    pts = {p["code"]: p for p in c.get("/api/status").json()["points"]}
+    assert pts["RO01"]["extra"]["simulated"] is False
+    c.post("/cai-dat/gia-lap", headers=AUTH, data={"v_RO01": "abc"}, follow_redirects=False)
+    assert c.post("/cai-dat/gia-lap", headers=AUTH, data={}, follow_redirects=False).status_code == 303
+    assert {p["code"]: p for p in c.get("/api/status").json()["points"]}["RO02"]["extra"]["simulated"] is False

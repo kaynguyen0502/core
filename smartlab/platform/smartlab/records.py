@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 
 from . import alarms, config
-from .models import GROUPS, LogEntry, Point, Reading
+from .models import GROUPS, LogEntry, Point, PointState, Reading
 
 TZ = ZoneInfo(config.TIMEZONE)
 WINDOW_BEFORE = timedelta(minutes=30)
@@ -75,6 +75,9 @@ def record_slot(session, slot_utc):
             status = "khong_dat" if level == "out" else "dat"
             if level != "out":
                 note = ""
+        st = session.scalar(select(PointState).where(PointState.point_id == p.id))
+        if present and st is not None and (st.extra or {}).get("simulated"):
+            note = ("Giá trị giả lập. " + note).strip()
         session.add(LogEntry(point_id=p.id, slot=slot_utc, status=status, note=note[:255], **vals))
         added += 1
     session.commit()

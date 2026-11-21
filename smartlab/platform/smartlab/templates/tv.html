@@ -41,6 +41,7 @@ header{display:flex;align-items:center;justify-content:space-between;gap:20px;fl
 .warn .val{color:var(--warnink)}.alarm .val{color:var(--alarmink)}.offline .val{color:#8a97aa}
 .unit{font-size:18px;color:var(--mute);font-weight:500}
 .note{font-size:13px;color:var(--mute)}
+.sim{font-size:11px;font-weight:800;letter-spacing:.04em;padding:2px 6px;border-radius:5px;background:#5b3fd1;color:#fff;vertical-align:middle}
 .st{align-self:flex-start;padding:5px 12px;border-radius:999px;font-size:19px;font-weight:800;background:#1d2b44;color:#bcd0ea}
 .st.run{background:var(--okbg);color:var(--ok)}.st.err{background:var(--alarm);color:#1b0505}
 .kv{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px}
@@ -130,7 +131,8 @@ function spark(vals, state) {
   const color = {ok: "#5b8def", warn: "#f2a33a", alarm: "#ff5a5a", offline: "#4a5568"}[state];
   return `<svg width="104" height="30" viewBox="0 0 104 30" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="${color}" stroke-width="2.5" stroke-linejoin="round"/></svg>`;
 }
-const head = p => `<div class="row"><span class="code">${esc(p.code)}</span><span class="badge">${LABEL[p.state]}</span></div><div class="name">${esc(p.name)}</div>`;
+const sim = p => p.extra && p.extra.simulated && p.state !== "offline" ? ` <span class="sim">GIẢ LẬP</span>` : "";
+const head = p => `<div class="row"><span class="code">${esc(p.code)}${sim(p)}</span><span class="badge">${LABEL[p.state]}</span></div><div class="name">${esc(p.name)}</div>`;
 
 function fridge(p) {
   return `<div class="tile ${p.state}" data-code="${esc(p.code)}" role="button" tabindex="0">${head(p)}

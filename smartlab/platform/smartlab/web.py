@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from datetime import date, datetime, timedelta
 
-from . import alarms, config, notify, records, service, settings, tts, tv_auto, tv_remote
+from . import alarms, config, notify, records, service, settings, simulate, tts, tv_auto, tv_remote
 from . import db as dbmod
 from .db import init_db
 from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState, ZaloLog
@@ -334,6 +334,37 @@ def notify_logs(user=Depends(admin), s=Depends(db)):
     rows = s.scalars(select(ZaloLog).order_by(ZaloLog.id.desc()).limit(100)).all()
     return {"logs": [{"at": local(r.ts).strftime("%d/%m/%Y %H:%M:%S"), "to": r.to, "text": r.text, "ok": r.ok,
                       "error": r.error} for r in rows]}
+
+
+# ---------------------------------------------------------------- giả lập
+@app.get("/cai-dat/gia-lap", response_class=HTMLResponse)
+def sim_page(request: Request, msg: str = "", user=Depends(admin), s=Depends(db)):
+    pts = s.scalars(select(Point).where(Point.group.in_(list(simulate.METRIC))).order_by(Point.sort, Point.code)).all()
+    return templates.TemplateResponse(request, "settings_sim.html", {
+        **_nav(request, "gia-lap"), "points": pts, "vals": settings.get(s, "simulate")["values"], "msg": msg,
+        "metric": simulate.METRIC, "groups": GROUPS})
+
+
+@app.post("/cai-dat/gia-lap")
+async def sim_save(request: Request, user=Depends(admin), s=Depends(db)):
+    f = await request.form()
+    codes = {p.code for p in s.scalars(select(Point).where(Point.group.in_(list(simulate.METRIC))))}
+    vals = {}
+    for code in codes:
+        raw = (f.get(f"v_{code}") or "").strip().replace(",", ".")
+        if raw:
+            try:
+                vals[code] = float(raw)
+            except ValueError:
+                return RedirectResponse(f"/cai-dat/gia-lap?msg=Giá trị của {code} không phải số", status_code=303)
+    settings.put(s, "simulate", {"values": vals}, user)
+    for st in s.scalars(select(PointState).join(Point, Point.id == PointState.point_id)
+                        .where(Point.code.in_(list(codes - set(vals))))):
+        if (st.extra or {}).get("simulated"):
+            st.extra = {**st.extra, "simulated": False}
+    s.commit()
+    n, _ = simulate.inject(s)                           # áp dụng ngay, không chờ 5 phút
+    return RedirectResponse(f"/cai-dat/gia-lap?msg=Đã lưu, đang giả lập {n} điểm", status_code=303)
 
 
 # ---------------------------------------------------------------- tivi

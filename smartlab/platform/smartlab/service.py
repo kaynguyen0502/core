@@ -53,6 +53,8 @@ def handle_message(session, topic, payload, now=None):
             session.add(Reading(point_id=point.id, ts=now, metric=metric, value=v))
         st.values = {**(st.values or {}), **values}
         st.last_seen = now
+        # số đo giả lập (trang Cài đặt → Giả lập) được đánh dấu; số đo thật tới thì bỏ dấu
+        st.extra = {**(st.extra or {}), "simulated": bool(extra.pop("simulated", False))}
     if extra:
         st.extra = {**(st.extra or {}), **extra}
         if point.group == "analyzer":

@@ -8,7 +8,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-from . import config, notify, records, service, settings, tv_auto
+from . import config, notify, records, service, settings, simulate, tv_auto
 from .db import SessionLocal, init_db
 
 log = logging.getLogger("smartlab.worker")
@@ -56,6 +56,7 @@ def run():
 
     started = service.utcnow()
     last_hb = 0.0
+    last_sim = 0.0
     while True:
         try:
             with LOCK, SessionLocal() as s:
@@ -76,6 +77,16 @@ def run():
                     log.info("Đã xuất dữ liệu tháng trước vào %s", folder)
         except Exception:
             log.exception("Lỗi ghi sổ / xuất dữ liệu")
+        if time.monotonic() - last_sim >= simulate.EVERY_S:
+            last_sim = time.monotonic()
+            try:
+                with LOCK, SessionLocal() as s:
+                    n, events = simulate.inject(s)
+                    if events:
+                        notify.send_events(events)
+                        s.commit()
+            except Exception:
+                log.exception("Lỗi gửi số đo giả lập")
         if time.monotonic() - last_hb >= HEARTBEAT_EVERY_S:
             notify.heartbeat()
             last_hb = time.monotonic()

@@ -1,0 +1,21 @@
+{% extends "settings_layout.html" %}
+{% block title %}Giả lập số đo{% endblock %}
+{% block heading %}Giả lập số đo (tạm thời){% endblock %}
+{% block body %}
+<form method="post" action="/cai-dat/gia-lap" class="card">
+  <p class="hint">Dùng tạm cho điểm đo chưa nối thiết bị (vd RO chưa có camera/API): máy chủ tự ghi giá trị cố định mỗi 5 phút.
+    Số giả lập được đánh dấu <b>GIẢ LẬP</b> trên dashboard và <b>GL</b> trong Sổ theo dõi ISO – <b>không phải số đo thật</b>,
+    không dùng làm bằng chứng kiểm soát. Để trống = tắt giả lập. Nối thiết bị thật xong hãy xóa giá trị ở đây.</p>
+  <table>
+    <thead><tr><th>Mã</th><th>Điểm đo</th><th>Nhóm</th><th style="width:180px">Giá trị giả lập</th></tr></thead>
+    <tbody>
+    {% for p in points %}
+      <tr><td><b>{{ p.code }}</b></td><td>{{ p.name }}</td><td>{{ groups.get(p.group, p.group) }}</td>
+        <td><input type="text" name="v_{{ p.code }}" inputmode="decimal" aria-label="Giá trị giả lập {{ p.code }}"
+             value="{{ vals.get(p.code, '') }}" placeholder="{{ 'µS/cm' if metric[p.group] == 'ec' else '°C' }}"></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  <div><button type="submit">Lưu</button></div>
+</form>
+{% endblock %}

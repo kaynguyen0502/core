@@ -55,7 +55,7 @@ def parse(topic: str, payload: bytes):
             if n is not None:
                 values[k] = n
         elif k in ("battery", "linkquality", "voltage", "status", "last_result", "samples_today",
-                   "tat_median_min", "iqc", "message"):
+                   "tat_median_min", "iqc", "message", "simulated"):
             extra[k] = v
     if not values and not extra:
         return None
