@@ -16,7 +16,9 @@ METRIC = {"ro": "ec", "fridge": "temperature", "freezer": "temperature", "room":
 
 def inject(session):
     """Gửi 1 vòng số đo giả lập. Trả về (số điểm, các AlarmEvent mới)."""
-    vals = settings.get(session, "simulate")["values"]
+    from .api_poll import api_codes
+    real = api_codes(session)                 # điểm đã có API thật thì thôi giả lập
+    vals = {k: v for k, v in settings.get(session, "simulate")["values"].items() if k not in real}
     if not vals:
         return 0, []
     events, n = [], 0

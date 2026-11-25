@@ -8,7 +8,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-from . import config, notify, records, service, settings, simulate, tv_auto
+from . import api_poll, config, notify, records, service, settings, simulate, tv_auto
 from .db import SessionLocal, init_db
 
 log = logging.getLogger("smartlab.worker")
@@ -57,6 +57,7 @@ def run():
     started = service.utcnow()
     last_hb = 0.0
     last_sim = 0.0
+    poller = api_poll.Poller()
     while True:
         try:
             with LOCK, SessionLocal() as s:
@@ -77,6 +78,18 @@ def run():
                     log.info("Đã xuất dữ liệu tháng trước vào %s", folder)
         except Exception:
             log.exception("Lỗi ghi sổ / xuất dữ liệu")
+        try:
+            with SessionLocal() as s:
+                jobs = poller.due(s)
+            results = poller.read(jobs) if jobs else []       # gọi mạng ngoài khóa, không chặn MQTT
+            if results:
+                with LOCK, SessionLocal() as s:
+                    events = poller.apply(s, results)
+                    if events:
+                        notify.send_events(events)
+                        s.commit()
+        except Exception:
+            log.exception("Lỗi đọc API")
         if time.monotonic() - last_sim >= simulate.EVERY_S:
             last_sim = time.monotonic()
             try:

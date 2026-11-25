@@ -17,7 +17,7 @@ from sqlalchemy import select
 
 from datetime import date, datetime, timedelta
 
-from . import alarms, config, notify, records, service, settings, simulate, tts, tv_auto, tv_remote
+from . import alarms, api_poll, config, notify, records, service, settings, simulate, tts, tv_auto, tv_remote
 from . import db as dbmod
 from .db import init_db
 from .models import GROUPS, SOURCES, AlarmEvent, AuditLog, Point, PointState, ZaloLog
@@ -334,6 +334,72 @@ def notify_logs(user=Depends(admin), s=Depends(db)):
     rows = s.scalars(select(ZaloLog).order_by(ZaloLog.id.desc()).limit(100)).all()
     return {"logs": [{"at": local(r.ts).strftime("%d/%m/%Y %H:%M:%S"), "to": r.to, "text": r.text, "ok": r.ok,
                       "error": r.error} for r in rows]}
+
+
+# ---------------------------------------------------------------- API thiết bị
+def _api_points(s):
+    return s.scalars(select(Point).where(Point.group.in_(list(api_poll.METRIC))).order_by(Point.sort, Point.code)).all()
+
+
+@app.get("/cai-dat/api", response_class=HTMLResponse)
+def api_page(request: Request, user=Depends(admin), s=Depends(db)):
+    return templates.TemplateResponse(request, "settings_api.html", {**_nav(request, "api"), "points": _api_points(s)})
+
+
+@app.get("/api/sources")
+def api_sources(user=Depends(admin), s=Depends(db)):
+    return {"sources": [{**src, "token": settings.mask(src.get("token", ""))} for src in settings.get(s, "api")["sources"]]}
+
+
+@app.post("/api/sources")
+async def api_sources_save(request: Request, user=Depends(admin), s=Depends(db)):
+    try:
+        b = await request.json()
+        rows = b["sources"]
+        assert isinstance(rows, list)
+    except Exception:  # noqa: BLE001
+        return _bad("Dữ liệu không hợp lệ")
+    codes = {p.code for p in _api_points(s)}
+    old = {x["code"]: x for x in settings.get(s, "api")["sources"]}
+    out, seen = [], set()
+    for r in rows:
+        code = str(r.get("code") or "").strip().upper()
+        url = str(r.get("url") or "").strip()
+        if not code and not url:
+            continue
+        if code not in codes:
+            return _bad(f"Mã điểm đo không đúng: {code or '(trống)'}")
+        if code in seen:
+            return _bad(f"{code} bị khai báo 2 lần")
+        if not url.startswith(("http://", "https://")):
+            return _bad(f"{code}: URL phải bắt đầu bằng http:// hoặc https://")
+        seen.add(code)
+        token = str(r.get("token") or "").strip()
+        if not token or token.startswith("•"):
+            token = old.get(code, {}).get("token", "")      # để trống / còn che = giữ token cũ
+        try:
+            every = max(1, min(int(r.get("every_min") or 5), 120))
+        except (TypeError, ValueError):
+            every = 5
+        out.append({"code": code, "url": url, "token": token, "path": str(r.get("path") or "").strip(), "every_min": every})
+    settings.put(s, "api", {"sources": out}, user)
+    return api_sources(user, s)
+
+
+@app.post("/api/sources/test/{code}")
+def api_source_test(code: str, user=Depends(admin), s=Depends(db)):
+    src = next((x for x in settings.get(s, "api")["sources"] if x["code"] == code), None)
+    if src is None:
+        return _bad("Chưa lưu nguồn này")
+    try:
+        data = api_poll.fetch(src)
+    except RuntimeError as e:
+        return _bad(str(e))
+    raw = data if isinstance(data, str) else __import__("json").dumps(data, ensure_ascii=False, indent=2)
+    try:
+        return {"raw": raw[:4000], "value": api_poll.extract(data, src.get("path", ""))}
+    except RuntimeError as e:
+        return {"raw": raw[:4000], "value": None, "error": str(e)}
 
 
 # ---------------------------------------------------------------- giả lập

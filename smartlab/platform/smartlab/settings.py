@@ -31,7 +31,8 @@ DEFAULTS = {
         "on_power": True,                 # tivi vừa bật -> tự mở dashboard
         "keep_open": False,               # trình duyệt bị đóng -> tự mở lại (sau 10 phút)
     },
-    "simulate": {"values": {}},           # {mã điểm: giá trị} – số đo giả lập tạm thời, gửi mỗi 5 phút
+    "simulate": {"values": {}},
+    "api": {"sources": []},               # [{"code","url","token","path","every_min"}] – đọc số đo qua API HTTP           # {mã điểm: giá trị} – số đo giả lập tạm thời, gửi mỗi 5 phút
     "sound": {
         "default_on": False,              # mọi màn hình dashboard tự hỏi bật âm thanh khi mở
         "chime": "3",                     # "3" = 3 hồi, "1" = 1 hồi, "0" = không chuông (chỉ giọng đọc)

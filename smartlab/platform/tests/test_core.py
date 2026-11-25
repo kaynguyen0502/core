@@ -521,3 +521,49 @@ def test_init_db_adds_new_columns_to_old_tables(tmp_path):
     assert "simulated" in {c["name"] for c in inspect(eng).get_columns("readings")}
     with eng.connect() as cn:
         assert cn.execute(text("SELECT simulated FROM readings")).scalar() == 0
+
+
+# ---------- đọc số đo qua API thiết bị ----------
+def test_api_extract_auto_and_path():
+    from smartlab import api_poll
+    assert api_poll.extract(0.08) == 0.08
+    assert api_poll.extract({"device_id": "A-TPN-119", "value": "0,08", "timestamp": 1795573645}) == 0.08
+    assert api_poll.extract({"ok": True, "data": {"id": 119, "ec": 0.12, "temp": 25.1}}) == 0.12
+    assert api_poll.extract({"data": [{"value": 0.5}, {"value": 0.07}]}) == 0.07          # phần tử mới nhất
+    assert api_poll.extract({"data": {"a": 1, "b": 2}}, "data.b") == 2
+    with pytest.raises(RuntimeError):
+        api_poll.extract({"data": {}}, "data.x")
+    with pytest.raises(RuntimeError):
+        api_poll.extract({"status": "ok"})
+
+
+def test_api_source_polls_ro01_and_stops_simulation(session, monkeypatch):
+    from fastapi.testclient import TestClient
+    from smartlab import api_poll, settings, simulate, web
+    from smartlab.models import Reading
+    calls = []
+
+    def fake_get(url, headers=None, timeout=None):
+        calls.append((url, headers))
+        return _Resp(200, {"device_id": "A-TPN-119", "value": 0.06})
+    monkeypatch.setattr(api_poll.httpx, "get", fake_get)
+    c = TestClient(web.app)
+    assert "API thiết bị" in c.get("/cai-dat/api", headers=AUTH).text
+    assert c.post("/api/sources", headers=AUTH, json={"sources": [{"code": "XX9", "url": "https://a"}]}).status_code == 400
+    d = c.post("/api/sources", headers=AUTH, json={"sources": [
+        {"code": "RO01", "url": "https://iot.example/api/getvalue", "token": "TOKEN_SECRET_123456", "every_min": 5}]}).json()
+    assert d["sources"][0]["token"].startswith("•") and "TOKEN_SECRET" not in str(d)
+    c.post("/api/sources", headers=AUTH, json={"sources": [{**d["sources"][0]}]})           # lưu lại, token che -> giữ
+    session.expire_all()
+    assert settings.get(session, "api")["sources"][0]["token"] == "TOKEN_SECRET_123456"
+    t = c.post("/api/sources/test/RO01", headers=AUTH).json()
+    assert t["value"] == 0.06 and "A-TPN-119" in t["raw"]
+    assert calls[-1][1]["Authorization"] == "Bearer TOKEN_SECRET_123456"
+    settings.put(session, "simulate", {"values": {"RO01": 0.08, "RO02": 0.0}})
+    assert simulate.inject(session)[0] == 1                                                # RO01 có API -> thôi giả lập
+    p = api_poll.Poller()
+    assert p.tick(session, now=1000)[0] == 1
+    assert p.tick(session, now=1100)[0] == 0                                               # chưa đủ 5 phút
+    pts = {x["code"]: x for x in c.get("/api/status").json()["points"]}
+    assert pts["RO01"]["display"] == "0,06"
+    assert session.query(Reading).filter(Reading.simulated.is_(False), Reading.metric == "ec").count() == 1
